@@ -21,9 +21,9 @@ fi
 KEY="${KEY:-$HOME/.ssh/id_ed25519}"
 
 SSH="ssh -i $KEY -o StrictHostKeyChecking=accept-new"
-REMOTE_DIR=/root/temperingworks-provision
+REMOTE_DIR=/root/temperingworks-deploy
 
-echo "==> pushing provision/ to root@${HOST}:${REMOTE_DIR}"
+echo "==> pushing deploy/ to root@${HOST}:${REMOTE_DIR}"
 ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "root@${HOST}" "mkdir -p ${REMOTE_DIR}"
 scp -i "$KEY" -o StrictHostKeyChecking=accept-new -r "$SCRIPT_DIR/files" "$SCRIPT_DIR/scripts" "root@${HOST}:${REMOTE_DIR}/"
 

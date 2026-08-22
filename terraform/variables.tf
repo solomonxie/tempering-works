@@ -27,7 +27,7 @@ variable "key_pair_name" {
 }
 
 variable "ssh_private_key_path" {
-  description = "Local path to the private key matching key_pair_name, used only to render provision/.env. Set in terraform.tfvars, not here."
+  description = "Local path to the private key matching key_pair_name, used only to render deploy/.env. Set in terraform.tfvars, not here."
   type        = string
 }
 

@@ -12,5 +12,5 @@ output "ssh_command" {
 
 output "next_step" {
   description = "What to run after `terraform apply` finishes."
-  value       = "cd ../provision && ./deploy.sh"
+  value       = "cd ../deploy && ./deploy.sh"
 }
