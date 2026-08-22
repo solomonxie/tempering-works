@@ -1,5 +1,0 @@
-# Deployed by provision/scripts/40-app-service.sh.
-# rc_ulimit is OpenRC's no-PAM mechanism for per-service ulimits — this filename must
-# exactly match /etc/init.d/temperingworks-server or OpenRC silently ignores it.
-rc_ulimit="-n 65535"
-APP_PORT=8080
