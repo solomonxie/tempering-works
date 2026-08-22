@@ -1,4 +1,4 @@
-# Upstream: network.tf, deploy_target.tf. Downstream: nothing — terminal node, printed to the operator.
+# Upstream: network.tf, provisioning.tf. Downstream: nothing — terminal node, printed to the operator.
 
 output "instance_id" {
   description = "EC2 instance id, used by the Makefile's start-server/stop-server targets."
@@ -13,9 +13,4 @@ output "public_ip" {
 output "ssh_command" {
   description = "Ready-to-run SSH command (root — see compute.tf for why)."
   value       = "ssh -i ${var.ssh_private_key_path} root@${aws_eip.web.public_ip}"
-}
-
-output "next_step" {
-  description = "What to run after `terraform apply` finishes."
-  value       = "cd ../deploy && ./deploy.sh"
 }

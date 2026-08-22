@@ -1,5 +1,5 @@
 # Upstream: variables.tf, compute.tf (default vpc data, and the instance the EIP attaches to).
-# Downstream: compute.tf (security group id attached to the instance), ansible_inventory.tf
+# Downstream: compute.tf (security group id attached to the instance), provisioning.tf
 # and outputs.tf (both read the EIP's public_ip).
 
 resource "aws_security_group" "web" {

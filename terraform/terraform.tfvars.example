@@ -5,3 +5,7 @@ key_pair_name         = "your-keypair-name"
 ssh_private_key_path  = "~/.ssh/your-key.pem"
 ssh_public_key_path   = "~/.ssh/your-key.pub"
 ssh_ingress_cidr      = "x.x.x.x/32" # your public IP, e.g. from `curl ifconfig.me`
+
+# Uncomment once a real build exists — both must be set together to deploy the app.
+# app_binary_local_path   = "/path/to/temperingworks-server"
+# frontend_dist_local_dir = "/path/to/frontend/dist"

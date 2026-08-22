@@ -1,5 +1,5 @@
 # Upstream: none (pure input declarations).
-# Downstream: read by compute.tf, network.tf, deploy_target.tf, outputs.tf.
+# Downstream: read by compute.tf, network.tf, provisioning.tf, outputs.tf.
 # Real values for the no-default vars below come only from a gitignored terraform.tfvars —
 # never hardcode a real key pair name/path or CIDR here or in any tracked file.
 
@@ -27,7 +27,7 @@ variable "key_pair_name" {
 }
 
 variable "ssh_private_key_path" {
-  description = "Local path to the private key matching key_pair_name, used only to render deploy/.env. Set in terraform.tfvars, not here."
+  description = "Local path to the private key matching key_pair_name, used by provisioning.tf's SSH connection. Set in terraform.tfvars, not here."
   type        = string
 }
 
@@ -51,4 +51,16 @@ variable "app_http_port" {
   description = "TCP port the C++ server listens on and that the security group opens publicly."
   type        = number
   default     = 8080
+}
+
+variable "app_binary_local_path" {
+  description = "Local path to a built temperingworks-server binary. Leave blank (default) until a real build exists — provisioning.tf's deploy_app step only runs when this and frontend_dist_local_dir are both set. Set via terraform.tfvars, not here."
+  type        = string
+  default     = ""
+}
+
+variable "frontend_dist_local_dir" {
+  description = "Local path to the built frontend's static output directory (e.g. dist/). Leave blank (default) until a real build exists. Set via terraform.tfvars, not here."
+  type        = string
+  default     = ""
 }
