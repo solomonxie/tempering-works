@@ -1,0 +1,20 @@
+---
+# tiny-cloud's user_data (apk add python3) is best-effort — this play doesn't depend on
+# it having already succeeded.
+- name: Bootstrap Python for Ansible
+  hosts: temperingworks_web
+  gather_facts: false
+  tasks:
+    - name: Ensure python3 is present
+      ansible.builtin.raw: apk update && apk add --no-cache python3
+      changed_when: true
+
+- name: Configure temperingworks web server
+  hosts: temperingworks_web
+  become: true
+  roles:
+    - common
+    - c10k_tuning
+    - cpp_toolchain
+    - logging
+    - app_service

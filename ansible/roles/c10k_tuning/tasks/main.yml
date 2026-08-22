@@ -1,0 +1,14 @@
+---
+- name: Deploy C10K sysctl tuning
+  ansible.builtin.template:
+    src: 99-temperingworks-c10k.conf.j2
+    dest: /etc/sysctl.d/99-temperingworks-c10k.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: sysctl_conf
+
+- name: Apply sysctl tuning
+  ansible.builtin.command:
+    cmd: sysctl --system
+  when: sysctl_conf.changed
