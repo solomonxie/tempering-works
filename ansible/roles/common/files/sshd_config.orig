@@ -1,0 +1,12 @@
+PLACEHOLDER — not yet captured.
+
+Per the repo's ansible convention, this file should hold Alpine's actual shipped
+/etc/ssh/sshd_config, captured before the hardening template in
+../templates/sshd_config.j2 is ever applied to a live box, so the two can be diffed.
+
+One-time step (run once against a fresh instance, before the first `ansible-playbook
+site.yml` run that includes the common role):
+
+    ansible -m fetch -a "src=/etc/ssh/sshd_config dest=roles/common/files/sshd_config.orig flat=yes" temperingworks_web
+
+Then replace this placeholder with the fetched file and commit it.

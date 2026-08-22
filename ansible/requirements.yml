@@ -1,0 +1,4 @@
+---
+collections:
+  - name: community.general # provides the `capabilities` module (cap_net_bind_service)
+  - name: ansible.posix # provides the `synchronize` module (rsync for static assets)

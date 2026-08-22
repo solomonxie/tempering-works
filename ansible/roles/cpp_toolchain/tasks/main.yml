@@ -1,0 +1,10 @@
+---
+# Native aarch64/musl build tools — on-box compilation avoids the musl/aarch64
+# cross-toolchain pain of building from a non-ARM dev machine.
+- name: Install C++ build toolchain
+  community.general.apk:
+    name:
+      - build-base
+      - cmake
+      - git
+    state: present
