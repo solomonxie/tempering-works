@@ -1,6 +1,8 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_tcp.cpp -o build/hello_tcp
-    $ ./build/hello_tcp
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_tcp.cpp -o build/hello_tcp && ./build/hello_tcp
+    then:
+    $ telnet localhost 8080
+    then: type anything then hit enter.
 */
 
 #include <iostream>  // console I/O
@@ -50,7 +52,7 @@ int main() {
     */
     char buffer[1024];  // a fixed buffer to accept user request/input
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    std::string received_string(buffer, bytes_received);
+    std::string received_string(buffer, bytes_received);  // request_sting(...) way to construct a str var "request_sting".
     std::cout<< "Received: " << received_string << std::endl;
 
     std::string msg = "Hi, client!, Did you say "+ received_string +" ?\n";
