@@ -1,0 +1,17 @@
+#!/sbin/openrc-run
+# Deployed by provision/scripts/40-app-service.sh.
+
+name="temperingworks-server"
+description="temperingworks C++ C10K web/TCP server"
+command="/opt/temperingworks/bin/temperingworks-server"
+command_args="--port ${APP_PORT} --static-dir /opt/temperingworks/static"
+command_background=true
+command_user="temperingworks:temperingworks"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/opt/temperingworks/logs/temperingworks-server.log"
+error_log="/opt/temperingworks/logs/temperingworks-server.error.log"
+
+depend() {
+    need net
+    after firewall
+}

@@ -1,0 +1,8 @@
+PLACEHOLDER — not yet captured.
+
+Before running deploy.sh against a fresh instance for the first time, capture Alpine's
+actual shipped /etc/ssh/sshd_config so it can be diffed against files/sshd_config:
+
+    ssh -i ~/.ssh/mykeypair20260813.pem root@<ip> cat /etc/ssh/sshd_config > provision/files/sshd_config.orig
+
+Then replace this placeholder with the fetched file and commit it.
