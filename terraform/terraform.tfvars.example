@@ -3,4 +3,5 @@
 
 key_pair_name         = "your-keypair-name"
 ssh_private_key_path  = "~/.ssh/your-key.pem"
+ssh_public_key_path   = "~/.ssh/your-key.pub"
 ssh_ingress_cidr      = "x.x.x.x/32" # your public IP, e.g. from `curl ifconfig.me`

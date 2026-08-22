@@ -1,5 +1,5 @@
 # Upstream: none (pure input declarations).
-# Downstream: read by data.tf, security_group.tf, ec2.tf, eip.tf, inventory.tf, outputs.tf.
+# Downstream: read by compute.tf, network.tf, deploy_target.tf, outputs.tf.
 # Real values for the no-default vars below come only from a gitignored terraform.tfvars —
 # never hardcode a real key pair name/path or CIDR here or in any tracked file.
 
@@ -27,7 +27,12 @@ variable "key_pair_name" {
 }
 
 variable "ssh_private_key_path" {
-  description = "Local path to the private key matching key_pair_name, used only to render the Ansible inventory. Set in terraform.tfvars, not here."
+  description = "Local path to the private key matching key_pair_name, used only to render provision/.env. Set in terraform.tfvars, not here."
+  type        = string
+}
+
+variable "ssh_public_key_path" {
+  description = "Local path to the public key matching key_pair_name. Its content is embedded in user_data to set root's authorized_keys (tiny-cloud has no sudo/doas by default, so provisioning connects as root directly). Set in terraform.tfvars, not here."
   type        = string
 }
 

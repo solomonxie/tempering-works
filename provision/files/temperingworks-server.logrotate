@@ -1,0 +1,10 @@
+# Deployed by provision/scripts/30-logging.sh. The server writes its own log files
+# directly (not syslog), so this is what actually caps their size/age.
+/opt/temperingworks/logs/*.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

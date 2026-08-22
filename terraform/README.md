@@ -2,22 +2,22 @@
 
 Provisions a single EC2 instance (Alpine Linux, ARM64, `t4g.small`, `tiny`/tiny-cloud
 bootstrap) in the account's default VPC, plus the Elastic IP and security group it needs,
-and hands off to Ansible. File order on disk doesn't matter — reference order does; see
-each file's header comment for its place in the graph below.
+and hands off to `../provision/`. File order on disk doesn't matter — reference order
+does; see each file's header comment for its place in the graph below.
 
 ```
 terraform apply
   ├─ providers.tf        → aws + local provider setup
-  ├─ variables.tf         → resolve inputs (key pair name/path/CIDR from terraform.tfvars)
-  ├─ data.tf               → look up default VPC/subnet, Alpine 3.24 tiny AMI, existing key pair
-  ├─ security_group.tf     → SSH (your CIDR only) + app port (public), off the default VPC
-  ├─ ec2.tf                 → the instance itself, off the AMI/subnet/security group above
-  ├─ eip.tf                  → Elastic IP, associated to the instance
-  ├─ inventory.tf             → writes ansible/inventory/hosts.ini from the EIP (bridge step)
-  └─ outputs.tf                → prints public_ip, ssh command, next-step hint
+  ├─ variables.tf         → resolve inputs (key pair name/paths/CIDR from terraform.tfvars)
+  ├─ compute.tf             → default VPC/subnet + Alpine 3.24 tiny AMI + existing key pair
+  │                            lookups, then the instance itself (root's SSH key is set via
+  │                            user_data — Alpine ships without sudo/doas)
+  ├─ network.tf              → security group (SSH from your CIDR, app port public) + EIP
+  ├─ deploy_target.tf          → writes provision/.env from the EIP (bridge step)
+  └─ outputs.tf                  → prints public_ip, ssh command, next-step hint
         │
         ▼
-ansible-playbook site.yml   (configures the OS: tuning, toolchain, app service — see ../ansible/README.md)
+provision/deploy.sh   (shell scripts over SSH — no Ansible, no Python on the target; see ../provision/README.md)
         │
         ▼
 GoDaddy dashboard (manual)   (point temperingworks.com's A record + www at `public_ip`)
