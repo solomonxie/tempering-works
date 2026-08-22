@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+# Never commit terraform.tfvars — it holds identifying/security-sensitive info.
+
+key_pair_name         = "your-keypair-name"
+ssh_private_key_path  = "~/.ssh/your-key.pem"
+ssh_ingress_cidr      = "x.x.x.x/32" # your public IP, e.g. from `curl ifconfig.me`
