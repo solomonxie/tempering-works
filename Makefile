@@ -13,10 +13,6 @@ destroy-infra:
 	terraform -chdir=terraform destroy
 
 
-deploy-software:
-	cd deploy && ./deploy.sh
-
-
 start-server:
 	aws ec2 start-instances --instance-ids ${EC2_ID}
 

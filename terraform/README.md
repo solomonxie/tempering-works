@@ -1,23 +1,24 @@
 # Terraform
 
 Provisions a single EC2 instance (Alpine Linux, ARM64, `t4g.small`, `tiny`/tiny-cloud
-bootstrap) in the account's default VPC, plus the Elastic IP and security group it needs,
-and hands off to `../deploy/`. File order on disk doesn't matter — reference order
-does; see each file's header comment for its place in the graph below.
+bootstrap) in the account's default VPC, and configures its OS entirely as part of
+`terraform apply` — no separate deploy step, no Ansible, no Python on the target. File
+order on disk doesn't matter — reference order does; see each file's header comment for
+its place in the graph below.
 
 ```
 terraform apply
-  ├─ providers.tf        → aws + local provider setup
+  ├─ providers.tf        → aws + null provider setup
   ├─ variables.tf         → resolve inputs (key pair name/paths/CIDR from terraform.tfvars)
   ├─ compute.tf             → default VPC/subnet + Alpine 3.24 tiny AMI + existing key pair
   │                            lookups, then the instance itself (root's SSH key is set via
   │                            user_data — Alpine ships without sudo/doas)
   ├─ network.tf              → security group (SSH from your CIDR, app port public) + EIP
-  ├─ deploy_target.tf          → writes deploy/.env from the EIP (bridge step)
-  └─ outputs.tf                  → prints public_ip, ssh command, next-step hint
-        │
-        ▼
-deploy/deploy.sh   (shell scripts over SSH — no Ansible, no Python on the target; see ../deploy/README.md)
+  ├─ provisioning.tf           → pushes scripts/provision.sh over SSH and runs it (base
+  │                              packages, sshd hardening, C10K sysctl, toolchain, logging,
+  │                              app service); if app_binary_local_path and
+  │                              frontend_dist_local_dir are set, also syncs the app + restarts it
+  └─ outputs.tf                  → prints instance_id, public_ip, ssh command
         │
         ▼
 GoDaddy dashboard (manual)   (point temperingworks.com's A record + www at `public_ip`)
@@ -40,3 +41,7 @@ terraform init
 terraform plan
 terraform apply
 ```
+
+Re-running `apply` re-provisions the OS if `scripts/provision.sh` changed, and re-syncs
+the app if the binary or frontend dist changed — both are driven by content-hash
+triggers in `provisioning.tf`, not just instance replacement.
