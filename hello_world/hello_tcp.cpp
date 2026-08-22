@@ -36,30 +36,29 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
-    while (true) {
-        std::cout << "Waiting for a client...\n";
-        int client_fd = accept(server_fd, nullptr, nullptr);
-        std::cout << "Accepted client FD at: " << client_fd << std::endl;
+    // while (true) {  // don't do loop yet, just accept one client
+    std::cout << "Waiting for a client...\n";
+    int client_fd = accept(server_fd, nullptr, nullptr);
+    std::cout << "Accepted client FD at: " << client_fd << std::endl;
 
-        /*
-           buffer
-           ┌───┬───┬───┬───┬───┬───┬─── ... ───┐
-           │   │   │   │   │   │   │           │
-           └───┴───┴───┴───┴───┴───┴─── ... ───┘
-            1024 bytes
-        */
-        char buffer[1024];  // a fixed buffer to accept user request/input
-        int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        std::string received_string(buffer, bytes_received);
-        std::cout<< "Received: " << received_string << std::endl;
+    /*
+       buffer
+       ┌───┬───┬───┬───┬───┬───┬─── ... ───┐
+       │   │   │   │   │   │   │           │
+       └───┴───┴───┴───┴───┴───┴─── ... ───┘
+        1024 bytes
+    */
+    char buffer[1024];  // a fixed buffer to accept user request/input
+    int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    std::string received_string(buffer, bytes_received);
+    std::cout<< "Received: " << received_string << std::endl;
 
-        std::string msg = "Hi, client!, Did you say "+ received_string +" ?\n";
-        int bytes_sent = send(client_fd, msg.c_str(), msg.size(), 0);
-        std::cout << "Sent bytes of: " << bytes_sent << std::endl;
+    std::string msg = "Hi, client!, Did you say "+ received_string +" ?\n";
+    int bytes_sent = send(client_fd, msg.c_str(), msg.size(), 0);
+    std::cout << "Sent bytes of: " << bytes_sent << std::endl;
 
-        int close_success = close(client_fd);
-        std::cout << "Closed client succesfully: " << close_success << std::endl;
-    }
+    int close_success = close(client_fd);
+    std::cout << "Closed client succesfully: " << close_success << std::endl;
 
     return 0;
 }
