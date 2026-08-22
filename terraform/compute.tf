@@ -75,7 +75,7 @@ resource "aws_instance" "web" {
   # tiny-cloud implements a subset of cloud-init's #cloud-config format (users/packages/
   # runcmd), not full cloud-init. Alpine's cloud AMIs (3.15+) ship without sudo/doas, so
   # the default "alpine" user can't escalate to root — instead this sets root's own
-  # ssh_authorized_keys directly, so provisioning (provision/deploy.sh) connects as root.
+  # ssh_authorized_keys directly, so provisioning (deploy/deploy.sh) connects as root.
   # Verify at first boot: if root SSH doesn't come up, use EC2 Serial Console to recover.
   user_data = <<-EOF
     #cloud-config

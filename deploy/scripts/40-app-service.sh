@@ -20,5 +20,5 @@ if [ -x /opt/temperingworks/bin/temperingworks-server ]; then
   rc-service temperingworks-server start
 else
   echo "No binary at /opt/temperingworks/bin/temperingworks-server yet — service enabled but not started."
-  echo "Run provision/deploy-app.sh once you have a build."
+  echo "Run deploy/deploy-app.sh once you have a build."
 fi

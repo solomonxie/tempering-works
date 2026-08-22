@@ -1,4 +1,4 @@
-# Provisioning
+# Deploy
 
 Configures the OS/environment on the EC2 instance Terraform provisions (see
 `../terraform/README.md`). Plain POSIX shell over SSH — no Ansible, no Python on the

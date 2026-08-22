@@ -2,7 +2,7 @@
 
 Provisions a single EC2 instance (Alpine Linux, ARM64, `t4g.small`, `tiny`/tiny-cloud
 bootstrap) in the account's default VPC, plus the Elastic IP and security group it needs,
-and hands off to `../provision/`. File order on disk doesn't matter — reference order
+and hands off to `../deploy/`. File order on disk doesn't matter — reference order
 does; see each file's header comment for its place in the graph below.
 
 ```
@@ -13,11 +13,11 @@ terraform apply
   │                            lookups, then the instance itself (root's SSH key is set via
   │                            user_data — Alpine ships without sudo/doas)
   ├─ network.tf              → security group (SSH from your CIDR, app port public) + EIP
-  ├─ deploy_target.tf          → writes provision/.env from the EIP (bridge step)
+  ├─ deploy_target.tf          → writes deploy/.env from the EIP (bridge step)
   └─ outputs.tf                  → prints public_ip, ssh command, next-step hint
         │
         ▼
-provision/deploy.sh   (shell scripts over SSH — no Ansible, no Python on the target; see ../provision/README.md)
+deploy/deploy.sh   (shell scripts over SSH — no Ansible, no Python on the target; see ../deploy/README.md)
         │
         ▼
 GoDaddy dashboard (manual)   (point temperingworks.com's A record + www at `public_ip`)
