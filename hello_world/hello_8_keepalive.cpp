@@ -1,9 +1,9 @@
 /*
     $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_8_keepalive.cpp -o /tmp/hello_8_keepalive && /tmp/hello_8_keepalive
     then:
-    curl -v localhost:8080/about
-    or, to see persistent connection reuse multiple requests on one socket:
-    curl -v localhost:8080/about localhost:8080/index.html
+    (access multiple times with same connection)
+    curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
+    curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
 */
 
 #include <iostream>
@@ -58,23 +58,26 @@ HttpRequest parse_request(std::string raw_request) {
     stream >> request.method;  // parse whitespace seperated parts, stream like cout<<
     stream >> request.path;
     stream >> request.http_version;
-
     // HTTP/1.1 defaults to persistent connections, HTTP/1.0 defaults to close
     if (request.http_version == "HTTP/1.1") {
         request.keep_alive = true;
+    } else if (raw_request.find("Connection: keep-alive") != std::string::npos) {
+        request.keep_alive = true;
     }
-
+    if (raw_request.find("Connection: close") != std::string::npos) {
+        request.keep_alive = false;
+    }
     return request;
 }
 
 
-HttpResponse compose_repsonse(std::string path, bool keep_alive) {
+HttpResponse compose_repsonse(HttpRequest request) {
     HttpResponse response;
     // Route requst
-    if (path == "/") {
-        path = "/index.html";
+    if (request.path == "/") {
+        request.path = "/index.html";
     }
-    std::string filename = "hello_world/static" + path;
+    std::string filename = "hello_world/static" + request.path;
     std::cout<< "Reading file path: " + filename << std::endl;
 
     // Check existence
@@ -97,7 +100,7 @@ HttpResponse compose_repsonse(std::string path, bool keep_alive) {
         "HTTP/1.1 "+ std::to_string(response.status_code) +" "+ response.status_name +" \r\n"
         "Content-Type: "+ response.mimetype +"\r\n"
         "Content-Length: "+ std::to_string(content.size()) +"\r\n"
-        "Connection: "+ std::string(keep_alive ? "keep-alive" : "close") +"\r\n"
+        "Connection: "+ std::string(request.keep_alive ? "keep-alive" : "close") +"\r\n"
         "\r\n"
         + content;
     return response;
@@ -118,20 +121,17 @@ int handle_client(int client_fd) {
         std::string raw_request(buffer, bytes_received);
 
         HttpRequest request = parse_request(raw_request);
-        HttpResponse response = compose_repsonse(request.path, request.keep_alive);
+        HttpResponse response = compose_repsonse(request);
 
         int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
         // Stop connection:
-        if (bytes_sent <= 0) {
-            break;
-        }
-        // Stop connection:
-        if (!request.keep_alive) {
+        if (bytes_sent <= 0 || !request.keep_alive) {
             break;
         }
         std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
     }
     close(client_fd);
+    std::cout<< "Connection with client " << client_fd << " closed.\n";
     return 0;
 }
 
