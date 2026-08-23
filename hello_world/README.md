@@ -1,0 +1,56 @@
+Phases of implementation.
+
+Basic phases:
+- Phase 0 — C++ basics
+- Phase 1 — Hello World
+- Phase 2 — TCP server
+- Phase 3 — First HTTP response
+- Phase 4 — HTTP request parser
+- Phase 5 — HTTP response abstraction
+- Phase 6 — Routing
+- Phase 7 — Serving files
+- Phase 8 — Multiple clients
+- Phase 9 — Persistent connections
+- Phase 10 — Non-blocking server
+
+Then C10K-focused:
+- Phase 11 — C10K foundations
+    - Why blocking/thread-per-connection struggles
+    - File descriptors
+    - Event loops
+    - epoll
+    - Readiness notifications
+    - Connection state machines
+    - Handling thousands of sockets with limited threads
+- Phase 12 — C10K HTTP server
+    - Thousands of simultaneous connections
+    - Partial reads/writes
+    - Slow clients
+    - Keep-alive at scale
+    - Per-connection memory
+    - Efficient buffers
+    - Avoiding unnecessary copies
+    - Connection limits
+- Phase 13 — C10K benchmarking
+    - Load generation
+    - 1K → 5K → 10K connections
+    - Static-file workload
+    - Small-response workload
+    - Large-response workload
+    - Different clients requesting different resources
+    - CPU, memory, latency, throughput
+    - Finding bottlenecks
+- Phase 14 — C10K optimization
+    - epoll architecture refinement
+    - EPOLLIN / EPOLLOUT
+    - Edge-triggered vs level-triggered
+    - accept4()
+    - sendfile()
+    - Buffer management
+    - Memory allocation reduction
+    - System-call reduction
+    - Thread/event-loop architecture
+- Phase 15 — HTTP features
+- Phase 16 — Robustness
+- Phase 17 — Testing
+- Phase 18 — HTTPS
