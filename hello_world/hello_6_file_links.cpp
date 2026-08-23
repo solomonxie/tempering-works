@@ -94,6 +94,21 @@ HttpResponse compose_repsonse(std::string path) {
     return response;
 }
 
+
+int handle_client(int client_fd) {
+    char buffer[1024];
+    int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    std::string raw_request(buffer, bytes_received);
+
+    HttpRequest request = parse_request(raw_request);
+    HttpResponse response = compose_repsonse(request.path);
+
+    int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
+    close(client_fd);
+    return bytes_sent;
+}
+
+
 int main() {
     sockaddr_in address{};
     address.sin_family = AF_INET;
@@ -117,15 +132,7 @@ int main() {
         int client_fd = accept(server_fd, nullptr, nullptr);
         std::cout << "Accepted client FD at: " << client_fd << std::endl;
 
-        char buffer[1024];
-        int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        std::string raw_request(buffer, bytes_received);
-
-        HttpRequest request = parse_request(raw_request);
-        HttpResponse response = compose_repsonse(request.path);
-
-        send(client_fd, response.body.c_str(), response.body.size(), 0);
-        close(client_fd);
+        handle_client(client_fd);
     }
 
     return 0;
