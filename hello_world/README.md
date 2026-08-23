@@ -1,3 +1,4 @@
+Goal: implement a C++ web server from scratch through progressive phases.
 Phases of implementation.
 
 Basic phases:
