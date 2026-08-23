@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_tcp.cpp -o build/hello_tcp && ./build/hello_tcp
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_tcp.cpp -o build/hello_tcp && ./build/hello_tcp
     then:
     $ telnet localhost 8080
     then: type anything then hit enter.
