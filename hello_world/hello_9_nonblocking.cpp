@@ -46,15 +46,11 @@ Never wait for one client. Check which sockets are ready, work on them, then mov
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <unistd.h>  // close()
-#include <cerrno>
+#include <unistd.h>
 #include <string>
 #include <sstream>
 #include <fstream>  // std::ifstream
-#include <filesystem>
-#include <sys/select.h>  // select(), fd_set
-#include <fcntl.h>  // changing socket behavior(flag). fcntl=f-cntl=file control
-#include <poll.h>  // poll(), pollfd, monitoring multiple sockets
+#include <filesystem>  // fs:exists()
 
 
 struct HttpRequest {
@@ -147,112 +143,65 @@ HttpResponse compose_repsonse(HttpRequest request) {
 }
 
 
-void set_nonblocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+int handle_client(int client_fd) {
+    char buffer[1024];
+
+    // This loop is the core of Keep-alive (persistent connection)
+    // It means: keep receiving / sending with the same client server until it breaks
+    while (true) {
+        int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        // Stop connection:
+        if (bytes_received <= 0) {
+            break;
+        }
+        std::string raw_request(buffer, bytes_received);
+
+        HttpRequest request = parse_request(raw_request);
+        HttpResponse response = compose_repsonse(request);
+
+        int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
+        // Stop connection:
+        if (bytes_sent <= 0 || !request.keep_alive) {
+            break;
+        }
+        std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
+    }
+    close(client_fd);
+    std::cout<< "Connection with client " << client_fd << " closed.\n";
+    return 0;
 }
 
-int create_server() {
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
+int main() {
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(8080);
 
-    int reuse = 1;
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    // after server stop, port is not released immediately by default (waiting for old connections)
+    // SOL = (SO)cket (L)evel
+    // SO_REUSEADDR -> let us reuse port even if the status is "TIME_WAIT"
+    int reuse = 1;  // 0: disable; 1: enable
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
-    // Change behavior(flag) of server socket: make it non-blocking
-    // flasg | O_NONBLOCK ==> means
-    int flags = fcntl(server_fd, F_GETFL, 0);  // F_GETFL = File Get Flags, get current flags
-    fcntl(server_fd, F_SETFL, flags | O_NONBLOCK); // F_SETFL = File Set Flags, change to non-blocking
-
     int bind_success = bind(
-        server_fd,
-        reinterpret_cast<sockaddr*>(&address),
-        sizeof(address)
-    );
+            server_fd,
+            reinterpret_cast<sockaddr*>(&address),
+            sizeof(address)
+            );
     std::cout << "Binded socket succesfully: " << bind_success << std::endl;
 
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
-    return server_fd;
-}
-
-
-// Handles one ready-to-read event on client_fd. Returns false if the fd should
-// be closed and dropped (client hung up, real error, or "Connection: close").
-bool handle_client(int client_fd) {
-    char buffer[1024];
-    int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_received < 0) {
-        // select() said this fd was readable, so EAGAIN here would be spurious;
-        // treat it as "nothing to do yet" rather than closing the connection.
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return true;
-        }
-        return false;
-    }
-    if (bytes_received == 0) {
-        return false;  // client closed its end
-    }
-    std::string raw_request(buffer, bytes_received);
-
-    HttpRequest request = parse_request(raw_request);
-    HttpResponse response = compose_repsonse(request);
-
-    // Non-blocking send() can also return EAGAIN on a full socket buffer;
-    // ignored here for simplicity, handled properly once buffering arrives (Phase 12).
-    send(client_fd, response.body.c_str(), response.body.size(), 0);
-
-    return request.keep_alive;
-}
-
-
-int main() {
-    int server_fd = create_server();
-
-    // The set of fds we ask select() to watch for readability: the listening
-    // socket itself (new connections) plus every currently open client socket.
-    fd_set master_fds;
-    FD_ZERO(&master_fds);
-    FD_SET(server_fd, &master_fds);
-    int max_fd = server_fd;
-
     while (true) {
-        fd_set read_fds = master_fds;  // select() mutates its set, so pass a copy
-        select(max_fd + 1, &read_fds, nullptr, nullptr, nullptr);
+        std::cout << "Waiting for a client...\n";
+        int client_fd = accept(server_fd, nullptr, nullptr);
+        std::cout << "Accepted client FD at: " << client_fd << std::endl;
 
-        for (int fd = 0; fd <= max_fd; fd++) {
-            if (!FD_ISSET(fd, &read_fds)) {
-                continue;
-            }
-
-            if (fd == server_fd) {
-                // Drain every pending connection now, since select() only wakes us
-                // once even if several clients connected in the meantime.
-                int client_fd;
-                while ((client_fd = accept(server_fd, nullptr, nullptr)) > 0) {
-                    std::cout << "Accepted client FD at: " << client_fd << std::endl;
-                    int flags = fcntl(client_fd, F_GETFL, 0);
-                    fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
-                    FD_SET(client_fd, &master_fds);
-                    if (client_fd > max_fd) {
-                        max_fd = client_fd;
-                    }
-                }
-                continue;
-            }
-
-            bool keep_open = handle_client(fd);
-            if (!keep_open) {
-                std::cout << "Connection with client " << fd << " closed.\n";
-                close(fd);
-                FD_CLR(fd, &master_fds);
-            }
-        }
+        handle_client(client_fd);
     }
 
     return 0;
