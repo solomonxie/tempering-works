@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_http_1response.cpp -o build/hello_http_1response && ./build/hello_http_1response
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_http_1response.cpp -o build/hello_http_1response && ./build/hello_http_1response
     then:
     curl localhost:8080
     or:
