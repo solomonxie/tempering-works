@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_7_concurrency.cpp -o /tmp/hello_7_concurrency && /tmp/hello_7_concurrency
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_7_threads.cpp -o /tmp/hello_7_threads && /tmp/hello_7_threads
     then:
     curl -v localhost:8080/about
     or:
