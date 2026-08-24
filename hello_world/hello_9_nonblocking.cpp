@@ -7,40 +7,6 @@
     No more std::thread: a single thread now serves every client. select() tells us
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
-
-The goal of this phase is to change our server from:
-
-thread
-  ↓
-accept()
-  ↓
-recv()   ← may BLOCK
-  ↓
-send()   ← may BLOCK
-  ↓
-recv()   ← may BLOCK
-  ↓
-...
-
-into an event-driven server:
-                 ┌───────────────┐
-                 │   event loop  │
-                 └───────┬───────┘
-                         │
-              ┌──────────┼──────────┐
-              ↓          ↓          ↓
-           socket A   socket B   socket C
-              │          │          │
-           readable   readable   writable
-              │          │          │
-              └──────────┼──────────┘
-                         ↓
-                    do some work
-                         ↓
-                    back to loop
-
-The important idea is:
-Never wait for one client. Check which sockets are ready, work on them, then move on.
 */
 
 #include <iostream>
@@ -51,6 +17,7 @@ Never wait for one client. Check which sockets are ready, work on them, then mov
 #include <sstream>
 #include <fstream>  // std::ifstream
 #include <filesystem>  // fs:exists()
+#include <poll.h>  // poll(), pollfd, POLLIN, socket event monitoring
 
 
 struct HttpRequest {
@@ -180,9 +147,6 @@ int main() {
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-    // after server stop, port is not released immediately by default (waiting for old connections)
-    // SOL = (SO)cket (L)evel
-    // SO_REUSEADDR -> let us reuse port even if the status is "TIME_WAIT"
     int reuse = 1;  // 0: disable; 1: enable
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
@@ -197,7 +161,15 @@ int main() {
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
     while (true) {
+        // Step 1: ask poll() to watch server socket for POLLIN event (is data/connection ready?).
+        pollfd fds[1];
+        fds[0].fd = server_fd;
+        fds[0].events = POLLIN;
+
         std::cout << "Waiting for a client...\n";
+        int poll_result = poll(fds, 1, -1);
+        std::cout << "poll() returned: " << poll_result << ", revents: " << fds[0].revents << std::endl;
+
         int client_fd = accept(server_fd, nullptr, nullptr);
         std::cout << "Accepted client FD at: " << client_fd << std::endl;
 
