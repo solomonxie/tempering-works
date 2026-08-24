@@ -160,20 +160,23 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
+    pollfd fds[1];
+    fds[0].fd = server_fd;
+    fds[0].events = POLLIN;  // target event: (in)put ready
+
     while (true) {
-        // Step 1: ask poll() to watch server socket for POLLIN event (is data/connection ready?).
-        pollfd fds[1];
-        fds[0].fd = server_fd;
-        fds[0].events = POLLIN;
-
         std::cout << "Waiting for a client...\n";
-        int poll_result = poll(fds, 1, -1);
-        std::cout << "poll() returned: " << poll_result << ", revents: " << fds[0].revents << std::endl;
+        poll(fds, 1, -1);
 
-        int client_fd = accept(server_fd, nullptr, nullptr);
-        std::cout << "Accepted client FD at: " << client_fd << std::endl;
+        // Step 2: iterate fds[] and only act when poll() detected target event.
+        for (pollfd& pfd : fds) {
+            if (pfd.revents & POLLIN) {
+                int client_fd = accept(pfd.fd, nullptr, nullptr);
+                std::cout << "Accepted client FD at: " << client_fd << std::endl;
 
-        handle_client(client_fd);
+                handle_client(client_fd);
+            }
+        }
     }
 
     return 0;
