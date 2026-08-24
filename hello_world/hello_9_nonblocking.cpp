@@ -18,6 +18,7 @@
 #include <fstream>  // std::ifstream
 #include <filesystem>  // fs:exists()
 #include <poll.h>  // poll(), pollfd, POLLIN, socket event monitoring
+#include <vector>
 
 
 struct HttpRequest {
@@ -160,15 +161,14 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
-    pollfd fds[1];
-    fds[0].fd = server_fd;
-    fds[0].events = POLLIN;  // target event: (in)put ready
+    // Step 3: use dynamic vector instead of fixed array, so to add more sockets along the way.
+    std::vector<pollfd> fds;
+    fds.push_back({server_fd, POLLIN, 0});
 
     while (true) {
         std::cout << "Waiting for a client...\n";
-        poll(fds, 1, -1);
+        poll(fds.data(), fds.size(), -1);   // vector.data() -> first address of vector array
 
-        // Step 2: iterate fds[] and only act when poll() detected target event.
         for (pollfd& pfd : fds) {
             if (pfd.revents & POLLIN) {
                 int client_fd = accept(pfd.fd, nullptr, nullptr);
