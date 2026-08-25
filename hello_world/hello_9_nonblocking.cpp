@@ -171,7 +171,6 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
-    // Step 3: use dynamic vector instead of fixed array, so to add more sockets along the way.
     std::vector<pollfd> fds;
     fds.push_back({server_fd, POLLIN, 0});
 
@@ -179,23 +178,24 @@ int main() {
         std::cout << "Waiting for a client...\n";
         poll(fds.data(), fds.size(), -1);
 
-        // Step 4: tell server_fd (new connection) apart from client fds (existing connection).
-        // Index-based loop because we mutate fds (push_back / erase) while walking it.
         for (size_t i = 0; i < fds.size(); i++) {
             if (!(fds[i].revents & POLLIN)) {
                 continue;
             }
-            // POLLIN means differently for server-socket and client-socket
             if (fds[i].fd == server_fd) {
+                // no need to fcntl(server_fd),
+                // because when POLLIN happens, accept() is guaranteed to return immediately
                 int client_fd = accept(server_fd, nullptr, nullptr);
-                fcntl(client_fd, F_SETFL, O_NONBLOCK);  // Step 5: never block on this client's recv/send
+                // Step 5: never block on this client's recv/send
+                fcntl(client_fd, F_SETFL, O_NONBLOCK);
                 std::cout << "Accepted client FD at: " << client_fd << std::endl;
-                fds.push_back({client_fd, POLLIN, 0});  // add new client socket to polling
+                fds.push_back({client_fd, POLLIN, 0});
             } else {
-                bool keep_alive = handle_client(fds[i].fd);  // handles one request, doesn't block
+                // should not delete socket after handling, unless it asks to close
+                bool keep_alive = handle_client(fds[i].fd);
                 if (!keep_alive) {
-                    fds.erase(fds.begin() + i);  // fds.begin()+i == socket_i's location
-                    i--;   // windback i++ after erased element
+                    fds.erase(fds.begin() + i);
+                    i--;
                 }
             }
         }
