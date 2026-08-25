@@ -65,5 +65,5 @@ Then C10K-focused:
 - Step 5 — `fcntl(client_fd, O_NONBLOCK)`; `handle_client()` rewritten to do one `recv`+`send` per call and return a `keep_alive` bool, instead of looping until the connection ends, so one client can't hog the thread
 - Step 6 — detect `EAGAIN`/`EWOULDBLOCK` on `recv()` and `send()` and treat it as "try again later", not a real close/error
 - Step 7 — event-loop robustness: check `accept()`'s return value and skip on failure (`-1`) instead of pushing a bad fd into `fds`; also react to `POLLHUP`/`POLLERR`, not just `POLLIN`, so a reset/half-closed client gets cleaned up instead of leaking its fd
-- Step 8 — buffer partial `send()` writes and re-arm `POLLOUT` to finish sending instead of silently dropping the remainder
+- Step 8 — buffer partial `send()` writes (`PendingWrite`/`try_send()`) and switch the fd to `POLLOUT` to finish sending on the next writable event, instead of silently dropping the remainder; the loop resumes a queued write before handling new `POLLIN` reads
 - Step 9 — buffer partial/multi-part `recv()` reads so a request bigger than one buffer, or split across TCP segments, still parses correctly
