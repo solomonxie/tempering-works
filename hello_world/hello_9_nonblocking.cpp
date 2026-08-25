@@ -4,15 +4,21 @@
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
 
-    No more std::thread: a single thread now serves every client. select() tells us
+    No more std::thread: a single thread now serves every client. poll() tells us
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
+
+    Step 5: client fds are set O_NONBLOCK and handled one request at a time —
+    handle_client() no longer loops until the keep-alive connection closes, so a
+    single client can't hog the loop; it's revisited on the next poll() readiness.
 */
 
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <fcntl.h>  // fcntl(), O_NONBLOCK
+#include <cerrno>  // errno, EAGAIN, EWOULDBLOCK
 #include <string>
 #include <sstream>
 #include <fstream>  // std::ifstream
@@ -111,32 +117,36 @@ HttpResponse compose_repsonse(HttpRequest request) {
 }
 
 
-int handle_client(int client_fd) {
+// Handles exactly one request off client_fd, then returns whether to keep polling it.
+// No inner loop: with client_fd non-blocking, looping here would just spin on
+// EAGAIN once the client goes idle instead of yielding back to poll().
+bool handle_client(int client_fd) {
     char buffer[1024];
 
-    // This loop is the core of Keep-alive (persistent connection)
-    // It means: keep receiving / sending with the same client server until it breaks
-    while (true) {
-        int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        // Stop connection:
-        if (bytes_received <= 0) {
-            break;
+    int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    if (bytes_received <= 0) {
+        // EAGAIN/EWOULDBLOCK: poll() said readable but nothing to read yet (or a
+        // spurious wakeup) — keep the connection open and try again next time.
+        if (bytes_received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            return true;
         }
-        std::string raw_request(buffer, bytes_received);
-
-        HttpRequest request = parse_request(raw_request);
-        HttpResponse response = compose_repsonse(request);
-
-        int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
-        // Stop connection:
-        if (bytes_sent <= 0 || !request.keep_alive) {
-            break;
-        }
-        std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
     }
-    close(client_fd);
-    std::cout<< "Connection with client " << client_fd << " closed.\n";
-    return 0;
+    std::string raw_request(buffer, bytes_received);
+
+    HttpRequest request = parse_request(raw_request);
+    HttpResponse response = compose_repsonse(request);
+
+    int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
+    if (bytes_sent <= 0 || !request.keep_alive) {
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
+    }
+    std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
+    return true;
 }
 
 
@@ -178,12 +188,15 @@ int main() {
             // POLLIN means differently for server-socket and client-socket
             if (fds[i].fd == server_fd) {
                 int client_fd = accept(server_fd, nullptr, nullptr);
+                fcntl(client_fd, F_SETFL, O_NONBLOCK);  // Step 5: never block on this client's recv/send
                 std::cout << "Accepted client FD at: " << client_fd << std::endl;
                 fds.push_back({client_fd, POLLIN, 0});  // add new client socket to polling
             } else {
-                handle_client(fds[i].fd);   // still blocks for this client's whole keep-alive session
-                fds.erase(fds.begin() + i);  // fds.begin()+i == socket_i's location
-                i--;   // windback i++ after erased element
+                bool keep_alive = handle_client(fds[i].fd);  // handles one request, doesn't block
+                if (!keep_alive) {
+                    fds.erase(fds.begin() + i);  // fds.begin()+i == socket_i's location
+                    i--;   // windback i++ after erased element
+                }
             }
         }
     }
