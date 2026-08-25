@@ -1,10 +1,7 @@
 # C10K testing plan
 
-`hello_world/` walked a C++ HTTP server up through Phase 10
-(`hello_09_poll.cpp` through `hello_17_partial_read.cpp`: `poll()`-based,
-non-blocking, single thread).
-The roadmap in `hello_world/README.md` turns to C10K next (Phases 11–14:
-foundations, the C10K server itself, benchmarking, optimization).
+This folder builds a C10K-capable HTTP server and the load-test harness
+that validates it — both live here.
 
 Before writing that server, this folder gets its test harness ready first:
 C++ load-generating clients that can drive a server up to 10,000 concurrent
@@ -31,10 +28,9 @@ c10k-challenge/
     keepalive_scale.cpp        (many persistent, mostly-idle connections)
 ```
 
-Each `.cpp` is self-contained with a compile/run comment at the top (same
-convention as `hello_world/hello_*.cpp` — no new Makefile/build system
-introduced). `static/large.bin` is generated locally and gitignored rather
-than committed.
+Each `.cpp` is self-contained with a compile/run comment at the top — no
+new Makefile/build system introduced. `static/large.bin` is generated
+locally and gitignored rather than committed.
 
 ## `common.hpp` — shared client building blocks
 
@@ -45,7 +41,7 @@ than committed.
 - `nonblocking_connect(host, port)`: creates a socket, `fcntl(O_NONBLOCK)`,
   kicks off `connect()`, returns the fd (completion confirmed via `poll()`'s
   `POLLOUT` in the caller's event loop) — mirrors the accept-side pattern
-  already used in `hello_world/hello_09_poll.cpp` onward.
+  the server itself will use.
 - A minimal HTTP/1.1 request builder
   (`GET <path> HTTP/1.1\r\nHost: ...\r\nConnection: keep-alive\r\n\r\n`) and
   a response reader that tracks `Content-Length`/`\r\n\r\n` to know when one
@@ -88,8 +84,7 @@ than committed.
 
 ## Target resources (`c10k-challenge/static/`)
 
-- `small.html`: short handwritten page (~1KB), same style as
-  `hello_world/static/index.html`.
+- `small.html`: short handwritten page (~1KB).
 - `medium.html`: a larger but still-committable page (~50KB) for workload
   variety.
 - `generate_large_file.sh`: a short shell script (`dd`/`head -c` from
@@ -102,9 +97,9 @@ than committed.
 
 ## Verification
 
-Since no C10K server exists yet to point these at, verification is that
-each tool **compiles cleanly** (`clang++ -std=c++20 -Wall -Wextra -g ...`)
-and, smoke-tested against the existing `hello_17_partial_read.cpp` at a small
-scale (e.g. `--max 50`), connects/requests/reports without crashing — this
-only exercises the harness itself, not a real 10K run, per the decision not
-to baseline the old server now.
+Since the C10K server doesn't exist yet, verification for now is that each
+tool **compiles cleanly** (`clang++ -std=c++20 -Wall -Wextra -g ...`).
+Once the server is written in this folder, each tool gets smoke-tested
+against it at a small scale (e.g. `--max 50`) to confirm it connects,
+requests, and reports without crashing, before trusting it for a real
+10K run.

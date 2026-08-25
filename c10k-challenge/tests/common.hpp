@@ -61,8 +61,8 @@ inline bool resolve(const std::string& host, int port, sockaddr_in& addr) {
 
 // Kicks off a non-blocking connect and returns the fd right away; the
 // caller's poll() loop watches it for POLLOUT (connected) or
-// POLLHUP/POLLERR (failed), same as the accept-side pattern in
-// hello_9_nonblocking.cpp.
+// POLLHUP/POLLERR (failed), mirroring the accept-side pattern the
+// server itself will use.
 inline int nonblocking_connect(const sockaddr_in& addr) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return -1;
