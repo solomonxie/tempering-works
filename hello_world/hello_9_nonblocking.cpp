@@ -114,18 +114,19 @@ HttpResponse compose_repsonse(HttpRequest request) {
 
 
 // Handles exactly one request off client_fd, then returns whether to keep polling it.
-// No inner loop: with client_fd non-blocking, looping here would just spin on
-// EAGAIN once the client goes idle instead of yielding back to poll().
 bool handle_client(int client_fd) {
     char buffer[1024];
 
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_received <= 0) {
-        // EAGAIN/EWOULDBLOCK: poll() said readable but nothing to read yet (or a
-        // spurious wakeup) — keep the connection open and try again next time.
-        if (bytes_received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            return true;
-        }
+    // Step6: check EAGAIN/EWOULDBLOCK
+    // recv()<0 means error, and it'll also raise `errno` for us to read
+    // error value can be ECONNRESET(real error),
+    // or EAGAIN=EWOULDBLOCK (E-again, try again later)
+    if (bytes_received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return true;
+    } else if (bytes_received == 0) {
+        // if recv()==0, means connection is closed from the other end
+        // if recv()<0, means real error here, ECONNRESET|EPIPE...
         close(client_fd);
         std::cout << "Connection with client " << client_fd << " closed.\n";
         return false;
@@ -136,14 +137,12 @@ bool handle_client(int client_fd) {
     HttpResponse response = compose_repsonse(request);
 
     int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
-    if (bytes_sent <= 0) {
-        // Step 6: client_fd is non-blocking now too, so a full send buffer shows up
-        // as EAGAIN/EWOULDBLOCK, not an error — don't tear down a healthy connection
-        // over it. We still don't retry the send itself (needs an outgoing buffer +
-        // POLLOUT), so this is just "don't misdiagnose backpressure as a close".
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return true;
-        }
+    // sent() can also <0, which means error
+    if (bytes_sent < 0 and (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return true;
+    } else if (bytes_sent <= 0) {
+        // if send()==0, means connection is closed from the other end
+        // if send()<0, means real error here, ECONNRESET|EPIPE...
         close(client_fd);
         std::cout << "Connection with client " << client_fd << " closed.\n";
         return false;
