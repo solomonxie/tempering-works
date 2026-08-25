@@ -59,12 +59,11 @@ std::string guess_mimetype(std::string filename) {
 
 
 HttpRequest parse_request(std::string raw_request) {
-    std::istringstream stream(raw_request);  // e..g, "GET /hello HTTP/1.1"
+    std::istringstream stream(raw_request);
     HttpRequest request;
-    stream >> request.method;  // parse whitespace seperated parts, stream like cout<<
+    stream >> request.method;
     stream >> request.path;
     stream >> request.http_version;
-    // HTTP/1.1 defaults to persistent connections, HTTP/1.0 defaults to close
     if (request.http_version == "HTTP/1.1") {
         request.keep_alive = true;
     } else if (raw_request.find("Connection: keep-alive") != std::string::npos) {
@@ -79,29 +78,24 @@ HttpRequest parse_request(std::string raw_request) {
 
 HttpResponse compose_repsonse(HttpRequest request) {
     HttpResponse response;
-    // Route requst
     if (request.path == "/") {
         request.path = "/index.html";
     }
     std::string filename = "hello_world/static" + request.path;
     std::cout<< "Reading file path: " + filename << std::endl;
 
-    // Check existence
     if (!std::filesystem::exists(filename)) {
         response.status_code = 404;
         response.status_name = "NOT EXIST";
         filename = "hello_world/static/404.html";
     }
 
-    // Check Mime Type
     response.mimetype = guess_mimetype(filename);
 
-    // Read file for response
     std::cout<< "Reading content from file: " << filename << std::endl;
     std::ifstream myfile(filename);
     std::string content((std::istreambuf_iterator<char>(myfile)), std::istreambuf_iterator<char>());
 
-    // Wrap with HTTP Response
     response.body =
         "HTTP/1.1 "+ std::to_string(response.status_code) +" "+ response.status_name +" \r\n"
         "Content-Type: "+ response.mimetype +"\r\n"
@@ -118,15 +112,9 @@ bool handle_client(int client_fd) {
     char buffer[1024];
 
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    // Step6: check EAGAIN/EWOULDBLOCK
-    // recv()<0 means error, and it'll also raise `errno` for us to read
-    // error value can be ECONNRESET(real error),
-    // or EAGAIN=EWOULDBLOCK (E-again, try again later)
     if (bytes_received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         return true;
     } else if (bytes_received == 0) {
-        // if recv()==0, means connection is closed from the other end
-        // if recv()<0, means real error here, ECONNRESET|EPIPE...
         close(client_fd);
         std::cout << "Connection with client " << client_fd << " closed.\n";
         return false;
@@ -137,12 +125,9 @@ bool handle_client(int client_fd) {
     HttpResponse response = compose_repsonse(request);
 
     int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
-    // sent() can also <0, which means error
     if (bytes_sent < 0 and (errno == EAGAIN || errno == EWOULDBLOCK)) {
         return true;
     } else if (bytes_sent <= 0) {
-        // if send()==0, means connection is closed from the other end
-        // if send()<0, means real error here, ECONNRESET|EPIPE...
         close(client_fd);
         std::cout << "Connection with client " << client_fd << " closed.\n";
         return false;
@@ -165,7 +150,7 @@ int main() {
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-    int reuse = 1;  // 0: disable; 1: enable
+    int reuse = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
     int bind_success = bind(
@@ -186,19 +171,30 @@ int main() {
         poll(fds.data(), fds.size(), -1);
 
         for (size_t i = 0; i < fds.size(); i++) {
+            // Step 7: detect client socket error: POLLHUP/POLLERR
+            // POLLHUP - hang-up, client side closed the connection
+            // POLLERR - ungraceful termination signal: TCP RST packet
+            // We need to remove the bad socket from polling
+            if (fds[i].fd != server_fd && (fds[i].revents & (POLLHUP | POLLERR))) {
+                close(fds[i].fd);
+                std::cout << "Connection with client " << fds[i].fd << " closed (HUP/ERR).\n";
+                fds.erase(fds.begin() + i);
+                i--;
+                continue;
+            }
             if (!(fds[i].revents & POLLIN)) {
                 continue;
             }
             if (fds[i].fd == server_fd) {
-                // no need to fcntl(server_fd),
-                // because when POLLIN happens, accept() is guaranteed to return immediately
                 int client_fd = accept(server_fd, nullptr, nullptr);
-                // Step 5: never block on this client's recv/send
+                // accept() can fail (-1), don't poll on a bad client
+                if (client_fd < 0) {
+                    continue;
+                }
                 fcntl(client_fd, F_SETFL, O_NONBLOCK);
                 std::cout << "Accepted client FD at: " << client_fd << std::endl;
                 fds.push_back({client_fd, POLLIN, 0});
             } else {
-                // should not delete socket after handling, unless it asks to close
                 bool keep_alive = handle_client(fds[i].fd);
                 if (!keep_alive) {
                     fds.erase(fds.begin() + i);

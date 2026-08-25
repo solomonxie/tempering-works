@@ -55,3 +55,15 @@ Then C10K-focused:
 - Phase 16 — Robustness
 - Phase 17 — Testing
 - Phase 18 — HTTPS
+
+## Phase 10 — Non-blocking server: detailed steps
+
+- Step 1 — `poll()` watches `server_fd` for `POLLIN` (data/connection ready)
+- Step 2 — iterate `fds[]`, only act when `revents & POLLIN` is set
+- Step 3 — swap fixed `pollfd fds[1]` array for `std::vector<pollfd>` so more sockets can be added
+- Step 4 — loop distinguishes `server_fd` (accept) vs client fds (handle); new client fds get pushed into `fds`
+- Step 5 — `fcntl(client_fd, O_NONBLOCK)`; `handle_client()` rewritten to do one `recv`+`send` per call and return a `keep_alive` bool, instead of looping until the connection ends, so one client can't hog the thread
+- Step 6 — detect `EAGAIN`/`EWOULDBLOCK` on `recv()` and `send()` and treat it as "try again later", not a real close/error
+- Step 7 — event-loop robustness: check `accept()`'s return value and skip on failure (`-1`) instead of pushing a bad fd into `fds`; also react to `POLLHUP`/`POLLERR`, not just `POLLIN`, so a reset/half-closed client gets cleaned up instead of leaking its fd
+- Step 8 — buffer partial `send()` writes and re-arm `POLLOUT` to finish sending instead of silently dropping the remainder
+- Step 9 — buffer partial/multi-part `recv()` reads so a request bigger than one buffer, or split across TCP segments, still parses correctly
