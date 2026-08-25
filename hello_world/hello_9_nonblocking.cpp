@@ -7,10 +7,6 @@
     No more std::thread: a single thread now serves every client. poll() tells us
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
-
-    Step 5: client fds are set O_NONBLOCK and handled one request at a time —
-    handle_client() no longer loops until the keep-alive connection closes, so a
-    single client can't hog the loop; it's revisited on the next poll() readiness.
 */
 
 #include <iostream>
@@ -140,7 +136,19 @@ bool handle_client(int client_fd) {
     HttpResponse response = compose_repsonse(request);
 
     int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
-    if (bytes_sent <= 0 || !request.keep_alive) {
+    if (bytes_sent <= 0) {
+        // Step 6: client_fd is non-blocking now too, so a full send buffer shows up
+        // as EAGAIN/EWOULDBLOCK, not an error — don't tear down a healthy connection
+        // over it. We still don't retry the send itself (needs an outgoing buffer +
+        // POLLOUT), so this is just "don't misdiagnose backpressure as a close".
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return true;
+        }
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
+    }
+    if (!request.keep_alive) {
         close(client_fd);
         std::cout << "Connection with client " << client_fd << " closed.\n";
         return false;
