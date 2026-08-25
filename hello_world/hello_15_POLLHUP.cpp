@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_9_nonblocking.cpp -o /tmp/hello_9_nonblocking && /tmp/hello_9_nonblocking
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_15_POLLHUP.cpp -o /tmp/hello_15_POLLHUP && /tmp/hello_15_POLLHUP
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -7,6 +7,8 @@
     No more std::thread: a single thread now serves every client. poll() tells us
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
+
+    Step 7: check accept()'s return value, and react to POLLHUP/POLLERR too, not just POLLIN, so a reset/hung-up client gets reaped instead of leaking its fd.
 */
 
 #include <iostream>
@@ -21,7 +23,6 @@
 #include <filesystem>  // fs:exists()
 #include <poll.h>  // poll(), pollfd, POLLIN, socket event monitoring
 #include <vector>
-#include <unordered_map>
 
 
 struct HttpRequest {
@@ -108,67 +109,38 @@ HttpResponse compose_repsonse(HttpRequest request) {
 }
 
 
-// Step 8: what's left of a response that didn't fully fit in one send(), plus
-// whether to close the connection once the rest has gone out.
-struct PendingWrite {
-    std::string data;
-    bool keep_alive;
-};
-
-
-bool try_send(int client_fd, const std::string& data, bool keep_alive, pollfd& pfd,
-              std::unordered_map<int, PendingWrite>& pending_writes) {
-    int bytes_sent = send(client_fd, data.c_str(), data.size(), 0);
-    if (bytes_sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        bytes_sent = 0;
-    } else if (bytes_sent < 0) {
-        return false;
-    }
-    // Detected data was sent partially:
-    if (static_cast<size_t>(bytes_sent) < data.size()) {
-        pending_writes[client_fd] = {data.substr(bytes_sent), keep_alive};  // .substr(pos) returns everything after pos
-        // why override target event here instead of registering both POLLIN|POLLOUT?
-        // because client is almost always write ready, but it's a waste if nothing is to write
-        pfd.events = POLLOUT;
-        return true;
-    }
-    pending_writes.erase(client_fd);
-    pfd.events = POLLIN;
-    return keep_alive;
-}
-
-
-// handle_client() do EITHER: send() or recv()
-// basic workflow:
-// 1. send pending data
-// 2. receive data from client, only if no partial data to send
-// 3. send final response to client
-// Why "either" not both? because `pfd.events` can only register 1 event?
-bool handle_client(pollfd& pfd, std::unordered_map<int, PendingWrite>& pending_writes) {
-    int client_fd = pfd.fd;
-
-    // Send to client:
-    // Step8: Detected if we have pending partial data yet to send to client
-    auto pending = pending_writes.find(client_fd);
-    if (pending != pending_writes.end()) {
-        PendingWrite write = pending->second;
-        // send the partial data, might also be sent partially (1/2 data, we may send 1/4)
-        return try_send(client_fd, write.data, write.keep_alive, pfd, pending_writes);
-    }
-
-    // Receive from client (only if there's no pending data to send first)
+// Handles exactly one request off client_fd, then returns whether to keep polling it.
+bool handle_client(int client_fd) {
     char buffer[1024];
+
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if (bytes_received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         return true;
-    } else if (bytes_received <= 0) {
+    } else if (bytes_received == 0) {
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
         return false;
     }
     std::string raw_request(buffer, bytes_received);
 
     HttpRequest request = parse_request(raw_request);
     HttpResponse response = compose_repsonse(request);
-    return try_send(client_fd, response.body, request.keep_alive, pfd, pending_writes);
+
+    int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
+    if (bytes_sent < 0 and (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return true;
+    } else if (bytes_sent <= 0) {
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
+    }
+    if (!request.keep_alive) {
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
+    }
+    std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
+    return true;
 }
 
 
@@ -196,30 +168,28 @@ int main() {
     std::vector<pollfd> fds;
     fds.push_back({server_fd, POLLIN, 0});
 
-    std::unordered_map<int, PendingWrite> pending_writes;
-
     while (true) {
         std::cout << "Waiting for a client...\n";
         poll(fds.data(), fds.size(), -1);
 
         for (size_t i = 0; i < fds.size(); i++) {
+            // Step 7: detect client socket error: POLLHUP/POLLERR
+            // POLLHUP - hang-up, client side closed the connection
+            // POLLERR - ungraceful termination signal: TCP RST packet
+            // We need to remove the bad socket from polling
             if (fds[i].fd != server_fd && (fds[i].revents & (POLLHUP | POLLERR))) {
                 close(fds[i].fd);
                 std::cout << "Connection with client " << fds[i].fd << " closed (HUP/ERR).\n";
-                pending_writes.erase(fds[i].fd);  // no need to keep closed connection data
-                // vector.erase accepts iterator, and .begin() = iterator,
-                // iterator+n means "offset by n"
-                // fds.begin()+i == fds[i]
                 fds.erase(fds.begin() + i);
                 i--;
                 continue;
             }
-            // We only deal with POLLIN / POLLOUT events now (readiness of read/write)
-            if (!(fds[i].revents & (POLLIN | POLLOUT))) {
+            if (!(fds[i].revents & POLLIN)) {
                 continue;
             }
             if (fds[i].fd == server_fd) {
                 int client_fd = accept(server_fd, nullptr, nullptr);
+                // accept() can fail (-1), don't poll on a bad client
                 if (client_fd < 0) {
                     continue;
                 }
@@ -227,11 +197,8 @@ int main() {
                 std::cout << "Accepted client FD at: " << client_fd << std::endl;
                 fds.push_back({client_fd, POLLIN, 0});
             } else {
-                bool keep_alive = handle_client(fds[i], pending_writes);
+                bool keep_alive = handle_client(fds[i].fd);
                 if (!keep_alive) {
-                    close(fds[i].fd);
-                    std::cout << "Connection with client " << fds[i].fd << " closed.\n";
-                    pending_writes.erase(fds[i].fd);
                     fds.erase(fds.begin() + i);
                     i--;
                 }

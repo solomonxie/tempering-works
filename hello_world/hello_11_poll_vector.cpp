@@ -1,9 +1,14 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_7_threads.cpp -o /tmp/hello_7_threads && /tmp/hello_7_threads
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_11_poll_vector.cpp -o /tmp/hello_11_poll_vector && /tmp/hello_11_poll_vector
     then:
-    curl -v localhost:8080/about
-    or:
-    open from browser: http://localhost:8080/about
+    curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
+    curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
+
+    No more std::thread: a single thread now serves every client. select() tells us
+    which fds have data waiting so we never call recv()/accept() and block on one
+    slow/idle client while others wait.
+
+    Step 3: swap the fixed pollfd array for std::vector<pollfd>, so more sockets can be added as clients connect.
 */
 
 #include <iostream>
@@ -14,13 +19,15 @@
 #include <sstream>
 #include <fstream>  // std::ifstream
 #include <filesystem>  // fs:exists()
-#include <thread>  // std::thread, creates / manages threads
+#include <poll.h>  // poll(), pollfd, POLLIN, socket event monitoring
+#include <vector>
 
 
 struct HttpRequest {
     std::string method;
     std::string path;
     std::string http_version;
+    bool keep_alive = false;
 };
 
 struct HttpResponse {
@@ -57,17 +64,26 @@ HttpRequest parse_request(std::string raw_request) {
     stream >> request.method;  // parse whitespace seperated parts, stream like cout<<
     stream >> request.path;
     stream >> request.http_version;
+    // HTTP/1.1 defaults to persistent connections, HTTP/1.0 defaults to close
+    if (request.http_version == "HTTP/1.1") {
+        request.keep_alive = true;
+    } else if (raw_request.find("Connection: keep-alive") != std::string::npos) {
+        request.keep_alive = true;
+    }
+    if (raw_request.find("Connection: close") != std::string::npos) {
+        request.keep_alive = false;
+    }
     return request;
 }
 
 
-HttpResponse compose_repsonse(std::string path) {
+HttpResponse compose_repsonse(HttpRequest request) {
     HttpResponse response;
     // Route requst
-    if (path == "/") {
-        path = "/index.html";
+    if (request.path == "/") {
+        request.path = "/index.html";
     }
-    std::string filename = "hello_world/static" + path;
+    std::string filename = "hello_world/static" + request.path;
     std::cout<< "Reading file path: " + filename << std::endl;
 
     // Check existence
@@ -90,6 +106,7 @@ HttpResponse compose_repsonse(std::string path) {
         "HTTP/1.1 "+ std::to_string(response.status_code) +" "+ response.status_name +" \r\n"
         "Content-Type: "+ response.mimetype +"\r\n"
         "Content-Length: "+ std::to_string(content.size()) +"\r\n"
+        "Connection: "+ std::string(request.keep_alive ? "keep-alive" : "close") +"\r\n"
         "\r\n"
         + content;
     return response;
@@ -98,19 +115,30 @@ HttpResponse compose_repsonse(std::string path) {
 
 int handle_client(int client_fd) {
     char buffer[1024];
-    int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_received <= 0) {
-        close(client_fd);
-        return bytes_received;
+
+    // This loop is the core of Keep-alive (persistent connection)
+    // It means: keep receiving / sending with the same client server until it breaks
+    while (true) {
+        int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        // Stop connection:
+        if (bytes_received <= 0) {
+            break;
+        }
+        std::string raw_request(buffer, bytes_received);
+
+        HttpRequest request = parse_request(raw_request);
+        HttpResponse response = compose_repsonse(request);
+
+        int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
+        // Stop connection:
+        if (bytes_sent <= 0 || !request.keep_alive) {
+            break;
+        }
+        std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
     }
-    std::string raw_request(buffer, bytes_received);
-
-    HttpRequest request = parse_request(raw_request);
-    HttpResponse response = compose_repsonse(request.path);
-
-    int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
     close(client_fd);
-    return bytes_sent;
+    std::cout<< "Connection with client " << client_fd << " closed.\n";
+    return 0;
 }
 
 
@@ -122,9 +150,6 @@ int main() {
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-    // after server stop, port is not released immediately by default (waiting for old connections)
-    // SOL = (SO)cket (L)evel
-    // SO_REUSEADDR -> let us reuse port even if the status is "TIME_WAIT"
     int reuse = 1;  // 0: disable; 1: enable
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
@@ -138,14 +163,22 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
+    // Step 3: use dynamic vector instead of fixed array, so to add more sockets along the way.
+    std::vector<pollfd> fds;
+    fds.push_back({server_fd, POLLIN, 0});
+
     while (true) {
         std::cout << "Waiting for a client...\n";
-        int client_fd = accept(server_fd, nullptr, nullptr);
-        std::cout << "Accepted client FD at: " << client_fd << std::endl;
+        poll(fds.data(), fds.size(), -1);   // vector.data() -> first address of vector array
 
-        // Concurrently handle:
-        std::thread mythread(handle_client, client_fd);
-        mythread.detach();
+        for (pollfd& pfd : fds) {
+            if (pfd.revents & POLLIN) {
+                int client_fd = accept(pfd.fd, nullptr, nullptr);
+                std::cout << "Accepted client FD at: " << client_fd << std::endl;
+
+                handle_client(client_fd);
+            }
+        }
     }
 
     return 0;

@@ -1,7 +1,8 @@
 # C10K testing plan
 
 `hello_world/` walked a C++ HTTP server up through Phase 10
-(`hello_9_nonblocking.cpp`: `poll()`-based, non-blocking, single thread).
+(`hello_09_poll.cpp` through `hello_17_partial_read.cpp`: `poll()`-based,
+non-blocking, single thread).
 The roadmap in `hello_world/README.md` turns to C10K next (Phases 11–14:
 foundations, the C10K server itself, benchmarking, optimization).
 
@@ -44,7 +45,7 @@ than committed.
 - `nonblocking_connect(host, port)`: creates a socket, `fcntl(O_NONBLOCK)`,
   kicks off `connect()`, returns the fd (completion confirmed via `poll()`'s
   `POLLOUT` in the caller's event loop) — mirrors the accept-side pattern
-  already used in `hello_9_nonblocking.cpp`.
+  already used in `hello_world/hello_09_poll.cpp` onward.
 - A minimal HTTP/1.1 request builder
   (`GET <path> HTTP/1.1\r\nHost: ...\r\nConnection: keep-alive\r\n\r\n`) and
   a response reader that tracks `Content-Length`/`\r\n\r\n` to know when one
@@ -103,7 +104,7 @@ than committed.
 
 Since no C10K server exists yet to point these at, verification is that
 each tool **compiles cleanly** (`clang++ -std=c++20 -Wall -Wextra -g ...`)
-and, smoke-tested against the existing `hello_9_nonblocking.cpp` at a small
+and, smoke-tested against the existing `hello_17_partial_read.cpp` at a small
 scale (e.g. `--max 50`), connects/requests/reports without crashing — this
 only exercises the harness itself, not a real 10K run, per the decision not
 to baseline the old server now.
