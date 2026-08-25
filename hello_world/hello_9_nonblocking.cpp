@@ -167,14 +167,23 @@ int main() {
 
     while (true) {
         std::cout << "Waiting for a client...\n";
-        poll(fds.data(), fds.size(), -1);   // vector.data() -> first address of vector array
+        poll(fds.data(), fds.size(), -1);
 
-        for (pollfd& pfd : fds) {
-            if (pfd.revents & POLLIN) {
-                int client_fd = accept(pfd.fd, nullptr, nullptr);
+        // Step 4: tell server_fd (new connection) apart from client fds (existing connection).
+        // Index-based loop because we mutate fds (push_back / erase) while walking it.
+        for (size_t i = 0; i < fds.size(); i++) {
+            if (!(fds[i].revents & POLLIN)) {
+                continue;
+            }
+            // POLLIN means differently for server-socket and client-socket
+            if (fds[i].fd == server_fd) {
+                int client_fd = accept(server_fd, nullptr, nullptr);
                 std::cout << "Accepted client FD at: " << client_fd << std::endl;
-
-                handle_client(client_fd);
+                fds.push_back({client_fd, POLLIN, 0});  // add new client socket to polling
+            } else {
+                handle_client(fds[i].fd);   // still blocks for this client's whole keep-alive session
+                fds.erase(fds.begin() + i);  // fds.begin()+i == socket_i's location
+                i--;   // windback i++ after erased element
             }
         }
     }
