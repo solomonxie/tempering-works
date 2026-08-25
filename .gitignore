@@ -1,4 +1,5 @@
 build/*
+c10k-challenge/static/large.bin
 
 # Prerequisites
 *.d
