@@ -58,12 +58,14 @@ Then C10K-focused:
 
 ## Phase 10 — Non-blocking server: detailed steps
 
-- Step 1 — `poll()` watches `server_fd` for `POLLIN` (data/connection ready)
-- Step 2 — iterate `fds[]`, only act when `revents & POLLIN` is set
-- Step 3 — swap fixed `pollfd fds[1]` array for `std::vector<pollfd>` so more sockets can be added
-- Step 4 — loop distinguishes `server_fd` (accept) vs client fds (handle); new client fds get pushed into `fds`
-- Step 5 — `fcntl(client_fd, O_NONBLOCK)`; `handle_client()` rewritten to do one `recv`+`send` per call and return a `keep_alive` bool, instead of looping until the connection ends, so one client can't hog the thread
-- Step 6 — detect `EAGAIN`/`EWOULDBLOCK` on `recv()` and `send()` and treat it as "try again later", not a real close/error
-- Step 7 — event-loop robustness: check `accept()`'s return value and skip on failure (`-1`) instead of pushing a bad fd into `fds`; also react to `POLLHUP`/`POLLERR`, not just `POLLIN`, so a reset/half-closed client gets cleaned up instead of leaking its fd
-- Step 8 — buffer partial `send()` writes (`PendingWrite`/`try_send()`) and switch the fd to `POLLOUT` to finish sending on the next writable event, instead of silently dropping the remainder; the loop resumes a queued write before handling new `POLLIN` reads
-- Step 9 — buffer partial/multi-part `recv()` reads so a request bigger than one buffer, or split across TCP segments, still parses correctly
+Each step below is its own file (unlike phases 1-9, which each grew one shared file).
+
+- Step 1 — `hello_09_poll.cpp` — `poll()` watches `server_fd` for `POLLIN` (data/connection ready)
+- Step 2 — `hello_10_POLLIN.cpp` — iterate `fds[]`, only act when `revents & POLLIN` is set
+- Step 3 — `hello_11_poll_vector.cpp` — swap fixed `pollfd fds[1]` array for `std::vector<pollfd>` so more sockets can be added
+- Step 4 — `hello_12_accept_loop.cpp` — loop distinguishes `server_fd` (accept) vs client fds (handle); new client fds get pushed into `fds`
+- Step 5 — `hello_13_fcntl.cpp` — `fcntl(client_fd, O_NONBLOCK)`; `handle_client()` rewritten to do one `recv`+`send` per call and return a `keep_alive` bool, instead of looping until the connection ends, so one client can't hog the thread
+- Step 6 — `hello_14_EAGAIN.cpp` — detect `EAGAIN`/`EWOULDBLOCK` on `recv()` and `send()` and treat it as "try again later", not a real close/error
+- Step 7 — `hello_15_POLLHUP.cpp` — check `accept()`'s return value and skip on failure (`-1`) instead of pushing a bad fd into `fds`; also react to `POLLHUP`/`POLLERR`, not just `POLLIN`, so a reset/half-closed client gets cleaned up instead of leaking its fd
+- Step 8 — `hello_16_partial_write.cpp` — buffer partial `send()` writes (`PendingWrite`/`try_send()`) and switch the fd to `POLLOUT` to finish sending on the next writable event, instead of silently dropping the remainder; the loop resumes a queued write before handling new `POLLIN` reads
+- Step 9 — `hello_17_partial_read.cpp` — buffer partial/multi-part `recv()` reads (`pending_reads`, keyed by fd) until the header terminator `\r\n\r\n` shows up, so a request split across TCP segments still parses correctly instead of being handled half-arrived

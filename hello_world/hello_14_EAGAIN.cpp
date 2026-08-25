@@ -1,20 +1,28 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_8_keepalive.cpp -o /tmp/hello_8_keepalive && /tmp/hello_8_keepalive
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_14_EAGAIN.cpp -o /tmp/hello_14_EAGAIN && /tmp/hello_14_EAGAIN
     then:
-    (access multiple times with same connection)
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
+
+    No more std::thread: a single thread now serves every client. poll() tells us
+    which fds have data waiting so we never call recv()/accept() and block on one
+    slow/idle client while others wait.
+
+    Step 6: detect EAGAIN/EWOULDBLOCK on recv()/send() and treat it as "try again later", not a real close or error.
 */
 
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <fcntl.h>  // fcntl(), O_NONBLOCK
+#include <cerrno>  // errno, EAGAIN, EWOULDBLOCK
 #include <string>
 #include <sstream>
 #include <fstream>  // std::ifstream
 #include <filesystem>  // fs:exists()
-#include <thread>  // std::thread, creates / manages threads
+#include <poll.h>  // poll(), pollfd, POLLIN, socket event monitoring
+#include <vector>
 
 
 struct HttpRequest {
@@ -107,32 +115,47 @@ HttpResponse compose_repsonse(HttpRequest request) {
 }
 
 
-int handle_client(int client_fd) {
+// Handles exactly one request off client_fd, then returns whether to keep polling it.
+bool handle_client(int client_fd) {
     char buffer[1024];
 
-    // This loop is the core of Keep-alive (persistent connection)
-    // It means: keep receiving / sending with the same client server until it breaks
-    while (true) {
-        int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        // Stop connection:
-        if (bytes_received <= 0) {
-            break;
-        }
-        std::string raw_request(buffer, bytes_received);
-
-        HttpRequest request = parse_request(raw_request);
-        HttpResponse response = compose_repsonse(request);
-
-        int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
-        // Stop connection:
-        if (bytes_sent <= 0 || !request.keep_alive) {
-            break;
-        }
-        std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
+    int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    // Step6: check EAGAIN/EWOULDBLOCK
+    // recv()<0 means error, and it'll also raise `errno` for us to read
+    // error value can be ECONNRESET(real error),
+    // or EAGAIN=EWOULDBLOCK (E-again, try again later)
+    if (bytes_received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return true;
+    } else if (bytes_received == 0) {
+        // if recv()==0, means connection is closed from the other end
+        // if recv()<0, means real error here, ECONNRESET|EPIPE...
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
     }
-    close(client_fd);
-    std::cout<< "Connection with client " << client_fd << " closed.\n";
-    return 0;
+    std::string raw_request(buffer, bytes_received);
+
+    HttpRequest request = parse_request(raw_request);
+    HttpResponse response = compose_repsonse(request);
+
+    int bytes_sent = send(client_fd, response.body.c_str(), response.body.size(), 0);
+    // sent() can also <0, which means error
+    if (bytes_sent < 0 and (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return true;
+    } else if (bytes_sent <= 0) {
+        // if send()==0, means connection is closed from the other end
+        // if send()<0, means real error here, ECONNRESET|EPIPE...
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
+    }
+    if (!request.keep_alive) {
+        close(client_fd);
+        std::cout << "Connection with client " << client_fd << " closed.\n";
+        return false;
+    }
+    std::cout << "Keeping connection alive on FD: " << client_fd << std::endl;
+    return true;
 }
 
 
@@ -144,9 +167,6 @@ int main() {
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-    // after server stop, port is not released immediately by default (waiting for old connections)
-    // SOL = (SO)cket (L)evel
-    // SO_REUSEADDR -> let us reuse port even if the status is "TIME_WAIT"
     int reuse = 1;  // 0: disable; 1: enable
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
@@ -160,14 +180,34 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
+    std::vector<pollfd> fds;
+    fds.push_back({server_fd, POLLIN, 0});
+
     while (true) {
         std::cout << "Waiting for a client...\n";
-        int client_fd = accept(server_fd, nullptr, nullptr);
-        std::cout << "Accepted client FD at: " << client_fd << std::endl;
+        poll(fds.data(), fds.size(), -1);
 
-        // Concurrently handle:
-        std::thread mythread(handle_client, client_fd);
-        mythread.detach();
+        for (size_t i = 0; i < fds.size(); i++) {
+            if (!(fds[i].revents & POLLIN)) {
+                continue;
+            }
+            if (fds[i].fd == server_fd) {
+                // no need to fcntl(server_fd),
+                // because when POLLIN happens, accept() is guaranteed to return immediately
+                int client_fd = accept(server_fd, nullptr, nullptr);
+                // Step 5: never block on this client's recv/send
+                fcntl(client_fd, F_SETFL, O_NONBLOCK);
+                std::cout << "Accepted client FD at: " << client_fd << std::endl;
+                fds.push_back({client_fd, POLLIN, 0});
+            } else {
+                // should not delete socket after handling, unless it asks to close
+                bool keep_alive = handle_client(fds[i].fd);
+                if (!keep_alive) {
+                    fds.erase(fds.begin() + i);
+                    i--;
+                }
+            }
+        }
     }
 
     return 0;

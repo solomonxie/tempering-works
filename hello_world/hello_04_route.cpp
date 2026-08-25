@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_4_route.cpp -o build/hello_4_route && ./build/hello_4_route
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_04_route.cpp -o build/hello_04_route && ./build/hello_04_route
     then:
     curl -v localhost:8080/about
     or:
