@@ -7,10 +7,6 @@
     No more std::thread: a single thread now serves every client. poll() tells us
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
-
-    Step 8: buffer a send() that didn't fully go out, and resume it on the next POLLOUT instead of silently dropping the remainder.
-
-    Step 9: buffer a recv() that didn't bring the whole request yet, and keep reading on the next POLLIN instead of parsing a half-arrived request.
 */
 
 #include <iostream>
@@ -112,8 +108,6 @@ HttpResponse compose_repsonse(HttpRequest request) {
 }
 
 
-// Step 8: what's left of a response that didn't fully fit in one send(), plus
-// whether to close the connection once the rest has gone out.
 struct PendingWrite {
     std::string data;
     bool keep_alive;
@@ -128,11 +122,8 @@ bool try_send(int client_fd, const std::string& data, bool keep_alive, pollfd& p
     } else if (bytes_sent < 0) {
         return false;
     }
-    // Detected data was sent partially:
     if (static_cast<size_t>(bytes_sent) < data.size()) {
-        pending_writes[client_fd] = {data.substr(bytes_sent), keep_alive};  // .substr(pos) returns everything after pos
-        // why override target event here instead of registering both POLLIN|POLLOUT?
-        // because client is almost always write ready, but it's a waste if nothing is to write
+        pending_writes[client_fd] = {data.substr(bytes_sent), keep_alive};
         pfd.events = POLLOUT;
         return true;
     }
@@ -149,11 +140,9 @@ bool handle_client(pollfd& pfd, std::unordered_map<int, PendingWrite>& pending_w
     int client_fd = pfd.fd;
 
     // Send to client:
-    // Step8: Detected if we have pending partial data yet to send to client
     auto pending_write = pending_writes.find(client_fd);
     if (pending_write != pending_writes.end()) {
         PendingWrite write = pending_write->second;
-        // send the partial data, might also be sent partially (1/2 data, we may send 1/4)
         return try_send(client_fd, write.data, write.keep_alive, pfd, pending_writes);
     }
 
@@ -222,14 +211,10 @@ int main() {
                 std::cout << "Connection with client " << fds[i].fd << " closed (HUP/ERR).\n";
                 pending_writes.erase(fds[i].fd);  // no need to keep closed connection data
                 pending_reads.erase(fds[i].fd);
-                // vector.erase accepts iterator, and .begin() = iterator,
-                // iterator+n means "offset by n"
-                // fds.begin()+i == fds[i]
                 fds.erase(fds.begin() + i);
                 i--;
                 continue;
             }
-            // We only deal with POLLIN / POLLOUT events now (readiness of read/write)
             if (!(fds[i].revents & (POLLIN | POLLOUT))) {
                 continue;
             }
