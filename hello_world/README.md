@@ -19,7 +19,6 @@ Then C10K-focused:
     - Why blocking/thread-per-connection struggles
     - File descriptors
     - Event loops
-    - epoll
     - Readiness notifications
     - Connection state machines
     - Handling thousands of sockets with limited threads
@@ -42,11 +41,7 @@ Then C10K-focused:
     - CPU, memory, latency, throughput
     - Finding bottlenecks
 - Phase 14 — C10K optimization
-    - epoll architecture refinement
-    - EPOLLIN / EPOLLOUT
-    - Edge-triggered vs level-triggered
-    - accept4()
-    - sendfile()
+    - epoll architecture refinement at scale (thousands of fds, not the hello_world handful)
     - Buffer management
     - Memory allocation reduction
     - System-call reduction
@@ -69,3 +64,9 @@ Each step below is its own file (unlike phases 1-9, which each grew one shared f
 - Step 7 — `hello_15_POLLHUP.cpp` — check `accept()`'s return value and skip on failure (`-1`) instead of pushing a bad fd into `fds`; also react to `POLLHUP`/`POLLERR`, not just `POLLIN`, so a reset/half-closed client gets cleaned up instead of leaking its fd
 - Step 8 — `hello_16_partial_write.cpp` — buffer partial `send()` writes (`PendingWrite`/`try_send()`) and switch the fd to `POLLOUT` to finish sending on the next writable event, instead of silently dropping the remainder; the loop resumes a queued write before handling new `POLLIN` reads
 - Step 9 — `hello_17_partial_read.cpp` — buffer partial/multi-part `recv()` reads (`pending_reads`, keyed by fd) until the header terminator `\r\n\r\n` shows up, so a request split across TCP segments still parses correctly instead of being handled half-arrived
+- Step 10 — `hello_18_epoll.cpp` — swap `poll()`/`std::vector<pollfd>` for `epoll_create1()`/`epoll_ctl()`/`epoll_wait()` (level-triggered); same behavior as step 9, but the kernel tracks the watch list and only returns fds that are actually ready, instead of the caller scanning the whole array every call
+- Step 11 — `hello_19_epoll_edge_triggered.cpp` — switch to `EPOLLET` (edge-triggered); `accept()` and `recv()` now loop until `EAGAIN` instead of once per wakeup, since an edge-triggered fd only notifies once per level change
+- Step 12 — `hello_20_accept4.cpp` — `accept4(..., SOCK_NONBLOCK)` replaces `accept()` + `fcntl(O_NONBLOCK)`, folding two syscalls (and the brief window between them) into one
+- Step 13 — `hello_21_sendfile.cpp` — `sendfile()` replaces reading a file into a `std::string` and `send()`-ing that; the body's bytes move kernel-to-kernel (page cache to socket) instead of round-tripping through a userspace buffer; tracked via `PendingFile` so a partial `sendfile()` resumes on the next writable event, same idea as `PendingWrite`
+
+Steps 10-13 are Linux-only (`epoll`, `accept4()`, `sendfile()` don't exist on macOS/BSD) — compile and run them on the project's EC2 box, not locally.
