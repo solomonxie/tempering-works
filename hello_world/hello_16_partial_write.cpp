@@ -128,7 +128,9 @@ bool try_send(int client_fd, const std::string& data, bool keep_alive, pollfd& p
     }
     // Detected data was sent partially:
     if (static_cast<size_t>(bytes_sent) < data.size()) {
-        pending_writes[client_fd] = {data.substr(bytes_sent), keep_alive};  // .substr(pos) returns everything after pos
+        //  .substr() = (python) data[bytes_sent:]
+        // why only send last part of data instead of first part? -- we already send first part, now need to send rest
+        pending_writes[client_fd] = {data.substr(bytes_sent), keep_alive};
         // why override target event here instead of registering both POLLIN|POLLOUT?
         // because client is almost always write ready, but it's a waste if nothing is to write
         pfd.events = POLLOUT;
