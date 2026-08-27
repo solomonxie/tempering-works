@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_16_partial_write.cpp -o /tmp/hello_16_partial_write && /tmp/hello_16_partial_write
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_17_partial_write.cpp -o /tmp/hello_17_partial_write && /tmp/hello_17_partial_write
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 8: buffer a send() that didn't fully go out, and resume it on the next POLLOUT instead of silently dropping the remainder.
+    Step 9: buffer a send() that didn't fully go out, and resume it on the next POLLOUT instead of silently dropping the remainder.
 */
 
 #include <iostream>
@@ -110,7 +110,7 @@ HttpResponse compose_repsonse(HttpRequest request) {
 }
 
 
-// Step 8: what's left of a response that didn't fully fit in one send(), plus
+// Step 9: what's left of a response that didn't fully fit in one send(), plus
 // whether to close the connection once the rest has gone out.
 struct PendingWrite {
     std::string data;

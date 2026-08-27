@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_14_EAGAIN.cpp -o /tmp/hello_14_EAGAIN && /tmp/hello_14_EAGAIN
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_15_EAGAIN.cpp -o /tmp/hello_15_EAGAIN && /tmp/hello_15_EAGAIN
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 6: detect EAGAIN/EWOULDBLOCK on recv()/send() and treat it as "try again later", not a real close or error.
+    Step 7: detect EAGAIN/EWOULDBLOCK on recv()/send() and treat it as "try again later", not a real close or error.
 */
 
 #include <iostream>
@@ -195,7 +195,7 @@ int main() {
                 // no need to fcntl(server_fd),
                 // because when POLLIN happens, accept() is guaranteed to return immediately
                 int client_fd = accept(server_fd, nullptr, nullptr);
-                // Step 5: never block on this client's recv/send
+                // Step 6: never block on this client's recv/send
                 fcntl(client_fd, F_SETFL, O_NONBLOCK);
                 std::cout << "Accepted client FD at: " << client_fd << std::endl;
                 fds.push_back({client_fd, POLLIN, 0});

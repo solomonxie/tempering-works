@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_10_POLLIN.cpp -o /tmp/hello_10_POLLIN && /tmp/hello_10_POLLIN
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_11_POLLIN.cpp -o /tmp/hello_11_POLLIN && /tmp/hello_11_POLLIN
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 2: iterate fds[] and only act when poll() actually flagged revents, instead of assuming readiness.
+    Step 3: iterate fds[] and only act when poll() actually flagged revents, instead of assuming readiness.
 */
 
 #include <iostream>
@@ -170,7 +170,7 @@ int main() {
         std::cout << "Waiting for a client...\n";
         poll(fds, 1, -1);
 
-        // Step 2: iterate fds[] and only act when poll() detected target event.
+        // Step 3: iterate fds[] and only act when poll() detected target event.
         for (pollfd& pfd : fds) {
             if (pfd.revents & POLLIN) {
                 int client_fd = accept(pfd.fd, nullptr, nullptr);

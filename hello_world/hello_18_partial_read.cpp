@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_17_partial_read.cpp -o /tmp/hello_17_partial_read && /tmp/hello_17_partial_read
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_18_partial_read.cpp -o /tmp/hello_18_partial_read && /tmp/hello_18_partial_read
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -151,7 +151,7 @@ bool handle_client(pollfd& pfd, std::unordered_map<int, PendingWrite>& pending_w
         pending_reads.erase(client_fd);  // no need to keep closed connection data
         return false;
     }
-    // Step 9: append onto whatever we already had from earlier recv()s on this fd,
+    // Step 10: append onto whatever we already had from earlier recv()s on this fd,
     // instead of treating this one chunk as the whole request.
     std::string& raw_request = pending_reads[client_fd];
     raw_request.append(buffer, bytes_received);  // equivalent to py: raw_request += buffer[:bytes_received]
@@ -194,7 +194,7 @@ int main() {
     fds.push_back({server_fd, POLLIN, 0});
 
     std::unordered_map<int, PendingWrite> pending_writes;
-    // Step 9: bytes received so far for a request that hasn't fully arrived, keyed by fd
+    // Step 10: bytes received so far for a request that hasn't fully arrived, keyed by fd
     std::unordered_map<int, std::string> pending_reads;
 
     while (true) {
