@@ -1,0 +1,8 @@
+# Without this, clangd falls back to a pre-C++20 default standard, so it
+# flags valid C++20 code (std::string::ends_with, std::filesystem, etc.) as
+# errors even though every file's own compile command uses -std=c++20.
+# There's no compile_commands.json in this repo (each lesson is compiled
+# standalone via the `$ clang++ ...` line in its own header comment), so
+# clangd has no other way to learn the standard in use.
+CompileFlags:
+  Add: [-std=c++20]
