@@ -214,7 +214,7 @@ int main() {
                 // vector.erase accepts iterator, and .begin() = iterator,
                 // iterator+n means "offset by n"
                 // fds.begin()+i == fds[i]
-                fds.erase(fds.begin() + i);
+                fds.erase(fds.begin() + i);  // python equivalent: del fds[i]
                 i--;
                 continue;
             }
