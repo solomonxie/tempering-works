@@ -133,32 +133,28 @@ bool try_send(int client_fd, const std::string& data, bool keep_alive, pollfd& p
 }
 
 
-// handle_client() does exactly ONE of: resume a pending send, keep buffering an
-// incomplete request, or receive+answer a request that just arrived complete.
 bool handle_client(pollfd& pfd, std::unordered_map<int, PendingWrite>& pending_writes,
                     std::unordered_map<int, std::string>& pending_reads) {
     int client_fd = pfd.fd;
 
-    // Send to client:
     auto pending_write = pending_writes.find(client_fd);
     if (pending_write != pending_writes.end()) {
         PendingWrite write = pending_write->second;
         return try_send(client_fd, write.data, write.keep_alive, pfd, pending_writes);
     }
 
-    // Receive from client (only if there's no pending data to send first)
     char buffer[1024];
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     if (bytes_received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         return true;
     } else if (bytes_received <= 0) {
-        pending_reads.erase(client_fd);
+        pending_reads.erase(client_fd);  // no need to keep closed connection data
         return false;
     }
     // Step 9: append onto whatever we already had from earlier recv()s on this fd,
     // instead of treating this one chunk as the whole request.
     std::string& raw_request = pending_reads[client_fd];
-    raw_request.append(buffer, bytes_received);
+    raw_request.append(buffer, bytes_received);  // equivalent to py: raw_request += buffer[:bytes_received]
 
     // "\r\n\r\n" marks the end of the headers. Until we see it, the request is still
     // arriving — go back to poll() instead of parsing a half-received request.
@@ -209,8 +205,8 @@ int main() {
             if (fds[i].fd != server_fd && (fds[i].revents & (POLLHUP | POLLERR))) {
                 close(fds[i].fd);
                 std::cout << "Connection with client " << fds[i].fd << " closed (HUP/ERR).\n";
-                pending_writes.erase(fds[i].fd);  // no need to keep closed connection data
-                pending_reads.erase(fds[i].fd);
+                pending_writes.erase(fds[i].fd);
+                pending_reads.erase(fds[i].fd);  // no need to keep closed connection data
                 fds.erase(fds.begin() + i);
                 i--;
                 continue;
