@@ -1,12 +1,12 @@
 /*
     Linux only — compile & run on the EC2 box:
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_20_accept4.cpp -o /tmp/hello_20_accept4 && /tmp/hello_20_accept4
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_21_accept4.cpp -o /tmp/hello_21_accept4 && /tmp/hello_21_accept4
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
 
-    Step 12: accept4() replaces accept() + fcntl(O_NONBLOCK) from hello_19.
-    accept() always hands back a blocking fd; every step since hello_13 has
+    Step 13: accept4() replaces accept() + fcntl(O_NONBLOCK) from hello_20.
+    accept() always hands back a blocking fd; every step since hello_14 has
     followed it with a separate fcntl() call to flip on O_NONBLOCK before the
     fd could be used. accept4()'s SOCK_NONBLOCK flag does both in the same
     syscall — one syscall instead of two, and no window between them where the

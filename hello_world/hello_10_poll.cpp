@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_09_poll.cpp -o /tmp/hello_09_poll && /tmp/hello_09_poll
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_10_poll.cpp -o /tmp/hello_10_poll && /tmp/hello_10_poll
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 1: poll() watches server_fd for POLLIN — is a new connection waiting? — instead of accept()-ing blindly.
+    Step 2: poll() watches server_fd for POLLIN — is a new connection waiting? — instead of accept()-ing blindly.
 */
 
 #include <iostream>
@@ -163,7 +163,7 @@ int main() {
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
     while (true) {
-        // Step 1: ask poll() to watch server socket for POLLIN event (is data/connection ready?).
+        // Step 2: ask poll() to watch server socket for POLLIN event (is data/connection ready?).
         pollfd fds[1];
         fds[0].fd = server_fd;
         fds[0].events = POLLIN;

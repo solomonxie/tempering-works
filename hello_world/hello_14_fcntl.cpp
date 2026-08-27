@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_13_fcntl.cpp -o /tmp/hello_13_fcntl && /tmp/hello_13_fcntl
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_14_fcntl.cpp -o /tmp/hello_14_fcntl && /tmp/hello_14_fcntl
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 5: client fds are set O_NONBLOCK and handled one request at a time —
+    Step 6: client fds are set O_NONBLOCK and handled one request at a time —
     handle_client() no longer loops until the keep-alive connection closes, so a
     single client can't hog the loop; it's revisited on the next poll() readiness.
 */
@@ -186,7 +186,7 @@ int main() {
                 // no need to fcntl(server_fd),
                 // because when POLLIN happens, accept() is guaranteed to return immediately
                 int client_fd = accept(server_fd, nullptr, nullptr);
-                // Step 5: never block on this client's recv/send
+                // Step 6: never block on this client's recv/send
                 fcntl(client_fd, F_SETFL, O_NONBLOCK);
                 std::cout << "Accepted client FD at: " << client_fd << std::endl;
                 fds.push_back({client_fd, POLLIN, 0});

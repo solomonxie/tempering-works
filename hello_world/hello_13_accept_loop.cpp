@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_12_accept_loop.cpp -o /tmp/hello_12_accept_loop && /tmp/hello_12_accept_loop
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_13_accept_loop.cpp -o /tmp/hello_13_accept_loop && /tmp/hello_13_accept_loop
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 4: tell server_fd (new connection) apart from client fds (existing connection); accept() pushes new client fds into the poll set.
+    Step 5: tell server_fd (new connection) apart from client fds (existing connection); accept() pushes new client fds into the poll set.
 */
 
 #include <iostream>
@@ -163,7 +163,7 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
-    // Step 3: use dynamic vector instead of fixed array, so to add more sockets along the way.
+    // Step 4: use dynamic vector instead of fixed array, so to add more sockets along the way.
     std::vector<pollfd> fds;
     fds.push_back({server_fd, POLLIN, 0});
 
@@ -171,7 +171,7 @@ int main() {
         std::cout << "Waiting for a client...\n";
         poll(fds.data(), fds.size(), -1);
 
-        // Step 4: tell server_fd (new connection) apart from client fds (existing connection).
+        // Step 5: tell server_fd (new connection) apart from client fds (existing connection).
         // Index-based loop because we mutate fds (push_back / erase) while walking it.
         for (size_t i = 0; i < fds.size(); i++) {
             if (!(fds[i].revents & POLLIN)) {

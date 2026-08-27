@@ -1,11 +1,11 @@
 /*
     Linux only — compile & run on the EC2 box:
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_21_sendfile.cpp -o /tmp/hello_21_sendfile && /tmp/hello_21_sendfile
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_22_sendfile.cpp -o /tmp/hello_22_sendfile && /tmp/hello_22_sendfile
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
 
-    Step 13: sendfile() replaces "read the whole file into a std::string, then
+    Step 14: sendfile() replaces "read the whole file into a std::string, then
     send() that string" from every step since hello_05. That path copies the
     file's bytes from the kernel's page cache into a userspace buffer (the
     ifstream read), then copies them right back into the kernel for the socket

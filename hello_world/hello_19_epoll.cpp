@@ -1,11 +1,11 @@
 /*
     Linux only (epoll doesn't exist on macOS/BSD) — compile & run on the EC2 box:
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_18_epoll.cpp -o /tmp/hello_18_epoll && /tmp/hello_18_epoll
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_19_epoll.cpp -o /tmp/hello_19_epoll && /tmp/hello_19_epoll
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
 
-    Step 10: swap poll() for epoll. Same behavior as hello_17, different readiness
+    Step 11: swap poll() for epoll. Same behavior as hello_18, different readiness
     API. poll() hands back the whole fds[] array every call and we scan all of it
     for revents; epoll_wait() only hands back the fds that are actually ready, and
     epoll itself tracks the watch list internally (epoll_ctl ADD/MOD/DEL) instead

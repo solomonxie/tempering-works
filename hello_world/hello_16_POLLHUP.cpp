@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_15_POLLHUP.cpp -o /tmp/hello_15_POLLHUP && /tmp/hello_15_POLLHUP
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_16_POLLHUP.cpp -o /tmp/hello_16_POLLHUP && /tmp/hello_16_POLLHUP
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 7: check accept()'s return value, and react to POLLHUP/POLLERR too, not just POLLIN, so a reset/hung-up client gets reaped instead of leaking its fd.
+    Step 8: check accept()'s return value, and react to POLLHUP/POLLERR too, not just POLLIN, so a reset/hung-up client gets reaped instead of leaking its fd.
 */
 
 #include <iostream>
@@ -173,7 +173,7 @@ int main() {
         poll(fds.data(), fds.size(), -1);
 
         for (size_t i = 0; i < fds.size(); i++) {
-            // Step 7: detect client socket error: POLLHUP/POLLERR
+            // Step 8: detect client socket error: POLLHUP/POLLERR
             // POLLHUP - hang-up, client side closed the connection
             // POLLERR - ungraceful termination signal: TCP RST packet
             // We need to remove the bad socket from polling

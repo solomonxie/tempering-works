@@ -1,5 +1,5 @@
 /*
-    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_11_poll_vector.cpp -o /tmp/hello_11_poll_vector && /tmp/hello_11_poll_vector
+    $ clang++ -std=c++20 -Wall -Wextra -g hello_world/hello_12_poll_vector.cpp -o /tmp/hello_12_poll_vector && /tmp/hello_12_poll_vector
     then:
     curl -s -I -H "Connection: keep-alive" http://localhost:8080 http://localhost:8080
     curl -s -I -H "Connection: close" http://localhost:8080 http://localhost:8080
@@ -8,7 +8,7 @@
     which fds have data waiting so we never call recv()/accept() and block on one
     slow/idle client while others wait.
 
-    Step 3: swap the fixed pollfd array for std::vector<pollfd>, so more sockets can be added as clients connect.
+    Step 4: swap the fixed pollfd array for std::vector<pollfd>, so more sockets can be added as clients connect.
 */
 
 #include <iostream>
@@ -163,7 +163,7 @@ int main() {
     int listen_success = listen(server_fd, 10);
     std::cout << "Listened succesfully: " << listen_success << std::endl;
 
-    // Step 3: use dynamic vector instead of fixed array, so to add more sockets along the way.
+    // Step 4: use dynamic vector instead of fixed array, so to add more sockets along the way.
     std::vector<pollfd> fds;
     fds.push_back({server_fd, POLLIN, 0});
 
