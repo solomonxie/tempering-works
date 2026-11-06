@@ -42,3 +42,4 @@ c10k-challenge/static/large.bin
 
 # debug information files
 *.dwo
+.DS_Store
